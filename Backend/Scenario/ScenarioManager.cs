@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 ///   - выбор вариантов ответа
 ///   - сохранение прогресса
 ///   - фоновая доставка сообщений при закрытом чате
-/// UI обновляется через ChatManagerAdvanced.
+/// UI обновляется через ChatController.
 /// </summary>
 public class ScenarioManager : MonoBehaviour
 {
@@ -21,7 +21,7 @@ public class ScenarioManager : MonoBehaviour
     private int dialogueGeneration;
     private int inputVersion;
     [Header("Зависимости")]
-    [SerializeField] private ChatManagerAdvanced chatManager;
+    [SerializeField] private PhoneChatController chatManager;
     //[SerializeField] private BackgroundMessageReceiver backgroundReceiver;
 
     [Header("Тайминги")]
@@ -52,7 +52,7 @@ public class ScenarioManager : MonoBehaviour
     private void Awake()
     {
         if (chatManager == null)
-            chatManager = FindAnyObjectByType<ChatManagerAdvanced>();
+            chatManager = FindAnyObjectByType<PhoneChatController>();
         //[if (backgroundReceiver == null)
         //    backgroundReceiver = BackgroundMessageReceiver.Instance;
     }

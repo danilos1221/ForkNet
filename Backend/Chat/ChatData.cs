@@ -26,6 +26,12 @@ public class ChatMessage
     public string @goto;  // Переход на сообщение с этим id (используется @ для экранирования зарезервированного слова)
 }
 
+public enum ChatType
+{
+    Private,
+    Group
+}
+
 [System.Serializable]
 public class Chat
 {
