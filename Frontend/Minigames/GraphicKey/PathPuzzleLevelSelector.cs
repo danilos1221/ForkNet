@@ -19,7 +19,7 @@ using TMPro;
 ///    и (опционально) selectorPanel — панель с самим экраном выбора, которая
 ///    скрывается после того, как игрок нажал на уровень.
 /// </summary>
-public class PathPuzzleLevelSelector : MonoBehaviour
+public class PathPuzzleLevelSelector : MonoBehaviour, INavigableScreen
 {
     [Header("Уровни")]
     [Tooltip("Список доступных уровней — перетащите сюда нужные ассеты PathPuzzleLevel.")]
@@ -28,14 +28,12 @@ public class PathPuzzleLevelSelector : MonoBehaviour
     [Header("Ссылки")]
     public PatternGridGenerator generator;
 
-    [Header("Навигация (телефон)")]
-    [Tooltip("Ссылка на PhoneNavigationManager сцены. Если назначена вместе с gameScreen — " +
-             "при выборе уровня экран переключается через неё (OpenScreen), что кладёт текущий " +
-             "экран в историю и позволяет вернуться назад системной кнопкой back.")]
-    public PhoneNavigationManager navManager;
-    [Tooltip("Экран самой игры (например, BackgroundGame) — на него переключаемся при выборе уровня, " +
-             "если назначены и navManager, и этот объект.")]
+    [Header("Экраны мини-игры")]
+    [Tooltip("Экран самой игры (например, BackgroundGame) — включается при выборе уровня.")]
     public GameObject gameScreen;
+
+    // Показан ли сейчас экран игры (true) или экран выбора уровня (false).
+    private bool isShowingGame;
 
     [Header("UI")]
     [Tooltip("Префаб кнопки одного уровня. Должен содержать компонент Button; если внутри есть " +
@@ -45,6 +43,9 @@ public class PathPuzzleLevelSelector : MonoBehaviour
     public RectTransform buttonsParent;
     [Tooltip("Сам экран выбора уровня — если назначен, скрывается сразу после выбора игроком.")]
     public GameObject selectorPanel;
+    [Tooltip("Корневой стартовый экран мини-игры (например, BackgroundMenu с кнопками " +
+             "\"Тестовые уровни\"/\"Readme\"). Показывается заново при каждом открытии приложения.")]
+    public GameObject rootMenuPanel;
 
     [Header("Автозагрузка")]
     [Tooltip("Индекс уровня в списке levels, который нужно загрузить сразу при старте, " +
@@ -57,6 +58,11 @@ public class PathPuzzleLevelSelector : MonoBehaviour
 
         if (autoLoadLevelIndex >= 0 && autoLoadLevelIndex < levels.Count)
             SelectLevel(autoLoadLevelIndex);
+        else
+            // На случай, если в сцене экраны сохранены активными одновременно (или
+            // DesktopManager не успел/не смог вызвать ResetToSelector) — гарантируем,
+            // что при старте виден только корневой экран мини-игры.
+            ResetToSelector();
     }
 
     void BuildButtons()
@@ -113,23 +119,54 @@ public class PathPuzzleLevelSelector : MonoBehaviour
         // потом вызываем ApplyLevel() → Generate(). GridLayoutGroup/LayoutRebuilder
         // считают геометрию корректно только для активной иерархии — если применить
         // уровень раньше, размеры точек посчитаются на неактивном объекте и будут нулевыми.
-        if (navManager != null && gameScreen != null)
-        {
-            navManager.OpenScreen(gameScreen);
-        }
-        else if (selectorPanel != null)
-        {
-            // Старое поведение — для сцен без PhoneNavigationManager.
+        if (selectorPanel != null)
             selectorPanel.SetActive(false);
-        }
+        if (gameScreen != null)
+            gameScreen.SetActive(true);
+        isShowingGame = true;
 
         generator.ApplyLevel(level);
     }
 
-    /// <summary>Показать экран выбора уровня снова — например, по кнопке "Другой уровень" в самой игре.</summary>
+    /// <summary>Показать экран выбора уровня снова — например, по кнопке "Другой уровень" в самой игре
+    /// или по кнопке "Тестовые уровни" на корневом экране.</summary>
     public void ShowSelector()
     {
+        if (gameScreen != null)
+            gameScreen.SetActive(false);
+        if (rootMenuPanel != null)
+            rootMenuPanel.SetActive(false);
         if (selectorPanel != null)
             selectorPanel.SetActive(true);
+        isShowingGame = false;
+    }
+
+    /// <summary>
+    /// Вызывается DesktopManager каждый раз при открытии этого приложения с рабочего стола —
+    /// гарантирует, что мини-игра всегда начинается с самого первого (стартового) экрана,
+    /// а не с того места, на котором её свернули в прошлый раз.
+    /// </summary>
+    public void ResetToSelector()
+    {
+        if (gameScreen != null) gameScreen.SetActive(false);
+        if (selectorPanel != null) selectorPanel.SetActive(false);
+        if (rootMenuPanel != null) rootMenuPanel.SetActive(true);
+        isShowingGame = false;
+    }
+
+    // ──────────────────────────────────────────────
+    // INavigableScreen — кнопка "назад" на телефоне
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Если сейчас показан экран игры — кнопка "назад" возвращает к выбору уровня
+    /// (само окно мини-игры не закрывается). Если уже на экране выбора — не обрабатываем,
+    /// и DesktopManager.TryHandleBack() свернёт всё окно приложения.
+    /// </summary>
+    public bool TryHandleBack()
+    {
+        if (!isShowingGame) return false;
+        ShowSelector();
+        return true;
     }
 }

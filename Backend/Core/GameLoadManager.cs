@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using System;
 
@@ -8,7 +9,7 @@ public class GameLoadManager : MonoBehaviour
 {
     public static GameLoadManager Instance;
 
-    [SerializeField] private string gameSceneName = "GameScene";
+    [SerializeField] private string gameSceneName = "Game";
 
     private GameSave pendingSave;
 
@@ -49,8 +50,17 @@ public class GameLoadManager : MonoBehaviour
     {
         if (scene.name == gameSceneName)
         {
-            ApplyPendingSave();
+            // sceneLoaded вызывается ПОСЛЕ Awake(), но ДО Start() объектов новой сцены —
+            // SaveSystem.gameData инициализируется в Start(), поэтому применяем
+            // сохранение через кадр, когда Start() уже гарантированно отработал.
+            StartCoroutine(ApplyPendingSaveNextFrame());
         }
+    }
+
+    private IEnumerator ApplyPendingSaveNextFrame()
+    {
+        yield return null;
+        ApplyPendingSave();
     }
 
     private void ApplyPendingSave()

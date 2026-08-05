@@ -32,8 +32,10 @@ public class ChatView : MonoBehaviour
     [SerializeField] private Button submitMessageButton;
 
     [Header("Кнопки выбора")]
-    [SerializeField] private GameObject choiceButtonPrefab;
-    [SerializeField] private Transform choiceButtonsContainer;
+    [Tooltip("Панель с заранее созданными кнопками-вариантами. Кнопки не создаются и не удаляются — только показываются/скрываются панель и меняется текст.")]
+    [SerializeField] private GameObject choicePanel;
+    [Tooltip("Кнопки-варианты в порядке слева вверху — вниз, сколько вариантов поддерживается одновременно")]
+    [SerializeField] private List<Button> choiceButtons = new();
 
     [Header("Настройки сообщений")]
     [SerializeField] private string messageAppearSoundName = "message_appear";
@@ -56,7 +58,6 @@ public class ChatView : MonoBehaviour
     // ──────────────────────────────────────────────
 
     private readonly List<GameObject> displayedMessages = new();
-    private readonly List<GameObject> activeChoiceButtons = new();
     private GameObject activeTypingStatusObject;
     private Coroutine pulseCoroutine;
     private Vector3 originalButtonScale;
@@ -186,10 +187,10 @@ public class ChatView : MonoBehaviour
     // Подсказка ввода игрока
     // ──────────────────────────────────────────────
 
-    public void ShowInputPrompt()
+    public void ShowInputPrompt(string promptText = null)
     {
         if (inputPromptText == null) return;
-        inputPromptText.text = "[Написать сообщение:]";
+        inputPromptText.text = promptText ?? "[Написать сообщение:]";
         inputPromptText.gameObject.SetActive(true);
         StartButtonPulse();
     }
@@ -207,42 +208,56 @@ public class ChatView : MonoBehaviour
 
     public void SpawnChoiceButtons(List<ChatChoice> choices, System.Action<int> onSelected)
     {
-        if (choiceButtonPrefab == null || choiceButtonsContainer == null)
+        if (choicePanel == null || choiceButtons.Count == 0)
         {
-            Debug.LogError("[ChatView] choiceButtonPrefab или choiceButtonsContainer не заданы!");
+            Debug.LogError("[ChatView] choicePanel или choiceButtons не заданы!");
             return;
         }
 
-        ClearChoiceButtons();
+        if (choices.Count > choiceButtons.Count)
+            Debug.LogWarning($"[ChatView] вариантов выбора ({choices.Count}) больше, чем готовых кнопок ({choiceButtons.Count}). Лишние варианты показаны не будут.");
 
-        for (int i = 0; i < choices.Count; i++)
+        choicePanel.SetActive(true);
+
+        for (int i = 0; i < choiceButtons.Count; i++)
         {
-            int capturedIndex = i;
-            GameObject btn = Instantiate(choiceButtonPrefab, choiceButtonsContainer);
-            btn.name = $"ChoiceButton_{i}";
+            Button btn = choiceButtons[i];
+            if (btn == null) continue;
 
-            var tmp = btn.GetComponentInChildren<TextMeshProUGUI>();
-            if (tmp != null) tmp.text = choices[i].text;
+            btn.onClick.RemoveAllListeners();
+
+            if (i < choices.Count)
+            {
+                int capturedIndex = i;
+
+                var tmp = btn.GetComponentInChildren<TextMeshProUGUI>();
+                if (tmp != null) tmp.text = choices[i].text;
+                else
+                {
+                    var txt = btn.GetComponentInChildren<Text>();
+                    if (txt != null) txt.text = choices[i].text;
+                }
+
+                btn.onClick.AddListener(() => onSelected?.Invoke(capturedIndex));
+                btn.gameObject.SetActive(true);
+            }
             else
             {
-                var txt = btn.GetComponentInChildren<Text>();
-                if (txt != null) txt.text = choices[i].text;
+                btn.gameObject.SetActive(false);
             }
-
-            if (btn.TryGetComponent<Button>(out var button))
-                button.onClick.AddListener(() => onSelected?.Invoke(capturedIndex));
-
-            activeChoiceButtons.Add(btn);
         }
     }
 
     public void ClearChoiceButtons()
     {
-        foreach (var btn in activeChoiceButtons)
+        foreach (var btn in choiceButtons)
         {
-            if (btn != null) Destroy(btn);
+            if (btn == null) continue;
+            btn.onClick.RemoveAllListeners();
         }
-        activeChoiceButtons.Clear();
+
+        if (choicePanel != null)
+            choicePanel.SetActive(false);
     }
 
     // ──────────────────────────────────────────────

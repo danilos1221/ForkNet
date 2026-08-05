@@ -18,27 +18,19 @@ public class PathPuzzleController : MonoBehaviour
     public Camera uiCamera;
     private Camera canvasCamera;
 
-    [Header("Layering (nested Canvas sorting)")]
+    [Header("Layering (порядок через иерархию, без override Canvas)")]
     [Tooltip("Фоновая графика (Image) позади всей мини-игры — как правило, лежит на этом же объекте " +
-             "(общий родитель linesParent/gridParent) или назначается явно сюда. Ей автоматически " +
-             "выставляется override Canvas с backgroundSortingOrder — самым нижним слоем игры.\n\n" +
-             "Это нужно потому, что nested Canvas с overrideSorting не 'вставляется между соседями' — он " +
-             "выдёргивает всё своё поддерево целиком ПЕРЕД или ПОСЛЕ ВСЕГО обычного (без Canvas) батча " +
-             "канваса. Раз glow (см. PatternDot.glowSortingOrder) и стены (wallSortingOrder) используют " +
-             "отрицательный override, чтобы уйти под точки — они утянут себя и под фон, если у фона нет " +
-             "своего явного слоя. Явный Canvas на фоне с числом МЕНЬШЕ, чем у glow, чинит это: тогда " +
-             "сравнение идёт explicit-число к explicit-числу, а не explicit к целому неразрывному батчу.")]
+             "(общий родитель glowLayer/linesParent/gridParent) или назначается явно сюда.\n\n" +
+             "Отдельный Canvas/sortingOrder ей не нужен: Unity и так рисует графику родительского " +
+             "объекта раньше (то есть ниже) любых его детей, а glowLayer/linesParent/gridParent как раз " +
+             "и есть дети этого объекта. Порядок между этими тремя контейнерами задаётся через sibling " +
+             "index в EnforceLayerOrder().")]
     public Graphic backgroundGraphic;
-    public int backgroundSortingOrder = -100;
 
-    [Tooltip("Sorting Order для стен (см. DrawWalls()). Должен быть БОЛЬШЕ backgroundSortingOrder и " +
-             "БОЛЬШЕ PatternDot.glowSortingOrder (стена рисуется над фоном и glow), но МЕНЬШЕ 0 — сами " +
-             "точки остаются без override-канваса и рисуются как обычно, то есть поверх абсолютно всего.")]
-    public int wallSortingOrder = -10;
-    [Tooltip("Sorting Order для линий пути и курсорной линии. Должен быть БОЛЬШЕ wallSortingOrder, " +
-             "чтобы путь читался поверх стен, и МЕНЬШЕ dotSortingOrder у PatternDot, чтобы точки " +
-             "оставались на переднем плане.")]
-    public int pathSortingOrder = -5;
+    [Tooltip("Контейнер для свечения точек (создаётся автоматически, если не назначен). Всегда " +
+             "ставится первым sibling'ом (сразу после фона), поэтому глобально лежит НИЖЕ стен, линий " +
+             "пути и самих точек — независимо от того, какая точка туда что добавила.")]
+    public RectTransform glowLayer;
 
     [Header("Grid")]
     public PatternDot[] dots;              // назначить в инспекторе, каждой точке выставить type
@@ -184,16 +176,30 @@ public class PathPuzzleController : MonoBehaviour
         if (startDot == null || endDot == null)
             Debug.LogWarning("PathPuzzleController: не назначены Start или End точки в массиве dots.");
 
-        // Явно закрепляем фон как самый нижний слой (см. EnsureBackgroundLayering) —
-        // иначе override Canvas у glow/стен "провалит" их под фон целиком, а не
-        // только под точки, потому что фон физически — часть того же
-        // неразделённого обычного (без Canvas) батча канваса.
-        EnsureBackgroundLayering();
+        // Фон лежит на этом же объекте (см. backgroundGraphic), поэтому Unity и
+        // так рисует его ПЕРЕД (то есть ниже) всех своих детей — glow/стен/точек.
+        // Отдельный Canvas/sortingOrder ему не нужен, достаточно не пускать его
+        // перехватывать клики курсора.
+        if (backgroundGraphic == null)
+            backgroundGraphic = GetComponent<Graphic>();
+        if (backgroundGraphic != null)
+            backgroundGraphic.raycastTarget = false;
 
-        // Glow каждой точки создаётся самой точкой в PatternDot.Awake() (см.
-        // PatternDot.EnsureGlow()) и лежит у неё внутри — контроллеру больше не
-        // нужно переносить его в linesParent, достаточно просто нарисовать стены.
         DrawWalls();
+
+        // Свечению каждой точки нужна её финальная мировая позиция (уже
+        // расставленная GridLayoutGroup) — создаём/переставляем его только
+        // теперь, а не в PatternDot.Awake().
+        RectTransform glow = EnsureGlowLayer();
+        foreach (var dot in dots)
+        {
+            if (dot == null) continue;
+            dot.EnsureGlow(glow, WorldToGlowLayerLocal(dot.GetComponent<RectTransform>()));
+        }
+
+        // Порядок отрисовки задаём одной иерархией (без override Canvas):
+        // фон (на этом объекте) → glowLayer → linesParent → gridParent.
+        EnforceLayerOrder();
 
         initialized = true;
         SetStatus("Начните с зелёной точки");
@@ -217,6 +223,16 @@ public class PathPuzzleController : MonoBehaviour
         foreach (var wall in wallLines) if (wall != null) Destroy(wall.gameObject);
         wallLines.Clear();
 
+        // Glow живёт в отдельном общем контейнере (glowLayer), а не внутри
+        // самих точек — при смене уровня старые точки удаляются генератором,
+        // но их glow-объекты нужно чистить отдельно, иначе они останутся
+        // висеть в glowLayer как мусор от предыдущего уровня.
+        if (glowLayer != null)
+        {
+            for (int i = glowLayer.childCount - 1; i >= 0; i--)
+                Destroy(glowLayer.GetChild(i).gameObject);
+        }
+
         selectedDots.Clear();
         pathSegments.Clear();
 
@@ -227,28 +243,55 @@ public class PathPuzzleController : MonoBehaviour
     }
 
     /// <summary>
-    /// Выставляет фоновой графике (backgroundGraphic, либо Image/Graphic на этом же
-    /// объекте, если явно не назначено) собственный override Canvas с самым низким
-    /// sortingOrder в игре. Без этого фон остаётся частью обычного (без Canvas) батча
-    /// канваса — и тогда override Canvas у glow/стен, у которых sortingOrder меньше 0,
-    /// "проваливает" их под фон целиком, а не только под точки: override-поддерево
-    /// всегда целиком раньше/позже ВСЕГО неразделённого батча, а не вставляется в
-    /// произвольное место внутри него. Явный Canvas на фоне превращает сравнение
-    /// "фон vs glow vs стена" в обычное число-к-числу между явными override-канвасами.
+    /// Создаёт (если ещё не назначен/не создан) контейнер glowLayer — прямой
+    /// потомок этого же объекта (того, на котором лежит backgroundGraphic),
+    /// растянутый на весь rect. Позиция внутри него у каждой точки выставляется
+    /// отдельно через WorldToGlowLayerLocal(), поэтому сам контейнер не обязан
+    /// совпадать по размеру с gridParent.
     /// </summary>
-    void EnsureBackgroundLayering()
+    RectTransform EnsureGlowLayer()
     {
-        if (backgroundGraphic == null)
-            backgroundGraphic = GetComponent<Graphic>(); // фон обычно лежит на этом же объекте — общем родителе linesParent/gridParent
-        if (backgroundGraphic == null) return;
+        if (glowLayer != null) return glowLayer;
 
-        // Фон не должен перехватывать ввод — клики должны попадать в точки.
-        backgroundGraphic.raycastTarget = false;
+        var go = new GameObject("GlowLayer", typeof(RectTransform));
+        var rt = go.GetComponent<RectTransform>();
+        rt.SetParent(transform, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
 
-        Canvas canvas = backgroundGraphic.GetComponent<Canvas>();
-        if (canvas == null) canvas = backgroundGraphic.gameObject.AddComponent<Canvas>();
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = backgroundSortingOrder;
+        glowLayer = rt;
+        return glowLayer;
+    }
+
+    /// <summary>
+    /// Расставляет по sibling index три контейнера — glowLayer, linesParent,
+    /// gridParent (родитель точек) — относительно друг друга, при условии, что
+    /// все они являются прямыми детьми ЭТОГО ЖЕ объекта (того, где лежит
+    /// backgroundGraphic). Это и есть весь "слоинг" мини-игры: без единого
+    /// override Canvas, чисто через порядок в иерархии (более поздний sibling
+    /// рисуется поверх более раннего). Итоговый порядок, от заднего к
+    /// переднему: фон (на этом объекте) → glowLayer → linesParent (стены
+    /// рисуются в DrawWalls() раньше любой линии пути, поэтому и так остаются
+    /// под ними) → gridParent (точки — последний sibling, поверх всего).
+    /// </summary>
+    void EnforceLayerOrder()
+    {
+        int index = 0;
+
+        RectTransform glow = EnsureGlowLayer();
+        if (glow.parent == transform)
+            glow.SetSiblingIndex(index++);
+
+        if (linesParent != null && linesParent.parent == transform)
+            linesParent.SetSiblingIndex(index++);
+
+        RectTransform gridParentRt = dots != null && dots.Length > 0 && dots[0] != null
+            ? dots[0].transform.parent as RectTransform
+            : null;
+        if (gridParentRt != null && gridParentRt.parent == transform)
+            gridParentRt.SetSiblingIndex(index);
     }
 
     void Update()
@@ -603,9 +646,6 @@ public class PathPuzzleController : MonoBehaviour
             barrier.name = $"Wall_{wall.from}_{wall.to}";
             barrier.SetAsLastSibling();
 
-            // Явный слой для стен — порядок больше не зависит от порядка детей.
-            ApplySortingOrder(barrier, wallSortingOrder);
-
             SetLineTransform(barrier, start, end, wallLineThickness);
 
             var fx = barrier.GetComponent<NeonLineFx>();
@@ -675,10 +715,7 @@ public class PathPuzzleController : MonoBehaviour
 
         bool isNew = cursorLine == null;
         if (isNew)
-        {
             cursorLine = Instantiate(linePrefab, linesParent);
-            ApplySortingOrder(cursorLine, pathSortingOrder);
-        }
 
         cursorLine.SetAsLastSibling();
 
@@ -774,7 +811,6 @@ public class PathPuzzleController : MonoBehaviour
     void CreateLine(PatternDot from, PatternDot to)
     {
         RectTransform line = Instantiate(linePrefab, linesParent);
-        ApplySortingOrder(line, pathSortingOrder);
 
         Vector2 start = WorldToLinesParentLocal(from.GetComponent<RectTransform>());
         Vector2 end = WorldToLinesParentLocal(to.GetComponent<RectTransform>());
@@ -800,21 +836,21 @@ public class PathPuzzleController : MonoBehaviour
         line.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
     }
 
-    void ApplySortingOrder(RectTransform target, int sortingOrder)
-    {
-        if (target == null) return;
-
-        Canvas canvas = target.GetComponent<Canvas>();
-        if (canvas == null) canvas = target.gameObject.AddComponent<Canvas>();
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = sortingOrder;
-    }
-
     public Vector2 WorldToLinesParentLocal(RectTransform rt)
     {
         Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(canvasCamera, rt.position);
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             linesParent, screenPoint, canvasCamera, out Vector2 localPoint);
+        return localPoint;
+    }
+
+    /// <summary>Аналогично WorldToLinesParentLocal(), но целевой контейнер — glowLayer.</summary>
+    Vector2 WorldToGlowLayerLocal(RectTransform rt)
+    {
+        RectTransform glow = EnsureGlowLayer();
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(canvasCamera, rt.position);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            glow, screenPoint, canvasCamera, out Vector2 localPoint);
         return localPoint;
     }
 

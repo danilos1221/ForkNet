@@ -245,6 +245,12 @@ public class SaveSystem : MonoBehaviour
     }
     public void ApplyLoadedSave(GameSave save)
     {
+        if (gameData == null)
+        {
+            Debug.LogError("SaveSystem.ApplyLoadedSave: gameData ещё не инициализирована (GameManager.Instance.GameData)!");
+            return;
+        }
+
         gameData.characterAffection =
             save.characterAffection ?? new Dictionary<string, int>();
 

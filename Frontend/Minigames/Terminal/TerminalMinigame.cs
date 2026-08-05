@@ -30,7 +30,7 @@ public class TerminalMinigame : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[Terminal] TerminalUI не найден!");
+            //Debug.LogError("[Terminal] TerminalUI не найден!");
         }
     }
     

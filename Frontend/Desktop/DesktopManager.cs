@@ -20,7 +20,13 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
     
     [Header("Window Registry")]
     [SerializeField] private List<AppWindowEntry> appWindowEntries = new();
-    
+
+    [Header("Мини-игры")]
+    [Tooltip("Ссылка на PathPuzzleLevelSelector мини-игры \"путь по точкам\". Объект PathPuzzleController " +
+             "лежит в корне сцены (не внутри окна), поэтому GetComponentInChildren его не находит — " +
+             "ссылку нужно назначить явно.")]
+    [SerializeField] private PathPuzzleLevelSelector pathPuzzleLevelSelector;
+
     // State
     private bool iconsCreated = false;
     private DesktopIcon.AppType? currentOpenApp = null;
@@ -135,13 +141,11 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
 
     private void OnAppOpened(DesktopIcon.AppType appType)
     {
-        // Здесь можно добавить специфичную логику для разных приложений
-        // Например, для галереи — обновить контент при открытии
-        // Для этого можно использовать события или проверять GetComponent
-        
-        // Пример для галереи (если появится компонент):
-        // if (appWindows[appType].TryGetComponent<GalleryManager>(out var gallery))
-        //     gallery.RefreshGallery();
+        // Сбрасываем мини-игру "путь по точкам" на стартовый экран при каждом
+        // открытии — иначе она может остаться на экране самой игры/пустом состоянии,
+        // на котором её свернули в прошлый раз. PathPuzzleController лежит в корне
+        // сцены, а не внутри окна, поэтому используем прямую ссылку, а не поиск по детям.
+        pathPuzzleLevelSelector?.ResetToSelector();
     }
 
     private bool TryRestoreExistingApp(DesktopIcon.AppType appType)
@@ -154,7 +158,7 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
         return false;
     }
 
-    private void MinimizeCurrentApp()
+    public void MinimizeCurrentApp()
     {
         if (currentOpenApp.HasValue)
         {

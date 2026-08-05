@@ -13,6 +13,17 @@ public class MusicManager : MonoBehaviour
     
     private List<AudioClip> playlist = new List<AudioClip>();
     private int currentTrackIndex = 0;
+    private bool wasPlaying;
+
+    // ──────────────────────────────────────────────
+    // События
+    // ──────────────────────────────────────────────
+
+    /// <summary>Трек сменился. Параметры: новый AudioClip, индекс трека.</summary>
+    public event System.Action<AudioClip, int> OnTrackChanged;
+
+    /// <summary>Состояние воспроизведения изменилось. Параметр: isPlaying.</summary>
+    public event System.Action<bool> OnPlayStateChanged;
 
     
     private void Awake()
@@ -69,32 +80,35 @@ public class MusicManager : MonoBehaviour
     public void PlayTrack(int index)
     {
         if (index < 0 || index >= playlist.Count) return;
-        
+
         currentTrackIndex = index;
         audioSource.clip = playlist[currentTrackIndex];
         audioSource.Play();
+        OnTrackChanged?.Invoke(audioSource.clip, currentTrackIndex);
+        OnPlayStateChanged?.Invoke(true);
     }
     
     public void Play()
     {
         if (playlist.Count == 0) return;
-        
+
         if (audioSource.clip == null)
-        {
             audioSource.clip = playlist[currentTrackIndex];
-        }
-        
+
         audioSource.Play();
+        OnPlayStateChanged?.Invoke(true);
     }
-    
+
     public void Pause()
     {
         audioSource.Pause();
+        OnPlayStateChanged?.Invoke(false);
     }
-    
+
     public void Stop()
     {
         audioSource.Stop();
+        OnPlayStateChanged?.Invoke(false);
     }
     
     public void PlayNext()
@@ -140,10 +154,9 @@ public class MusicManager : MonoBehaviour
     
     private void Update()
     {
-        // Если трек закончился, переходим на следующий
-        if (audioSource.isPlaying && !audioSource.isPlaying && audioSource.clip != null)
-        {
+        // Авто-переключение по окончании трека
+        if (wasPlaying && !audioSource.isPlaying && audioSource.clip != null)
             PlayNext();
-        }
+        wasPlaying = audioSource.isPlaying;
     }
 }

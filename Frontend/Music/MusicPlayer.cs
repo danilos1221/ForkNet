@@ -20,34 +20,50 @@ public class MusicPlayer : MonoBehaviour
     [SerializeField] private GameObject trackItemPrefab;
     
     private List<MusicTrackItem> trackItems = new List<MusicTrackItem>();
-    
+
+    // ──────────────────────────────────────────────
+    // Unity lifecycle
+    // ──────────────────────────────────────────────
+
     private void Start()
     {
-        // Проверяем наличие MusicManager
-        Debug.Log("Инициализация MusicPlayer...");
         if (MusicManager.Instance == null)
         {
             Debug.LogError("MusicManager не найден! Добавьте его на GameManager.");
             return;
         }
-        
-        InitializeUI();
-        
+
         playButton.onClick.AddListener(TogglePlay);
         nextButton.onClick.AddListener(PlayNext);
         prevButton.onClick.AddListener(PlayPrevious);
         progressSlider.onValueChanged.AddListener(OnProgressChanged);
+
+        InitializeTrackList();
+    }
+
+    private void OnEnable()
+    {
+        if (MusicManager.Instance == null) return;
+        MusicManager.Instance.OnTrackChanged     += HandleTrackChanged;
+        MusicManager.Instance.OnPlayStateChanged += HandlePlayStateChanged;
+
+        // Синхронизируем UI с текущим состоянием при открытии окна
+        SyncUIWithCurrentState();
+    }
+
+    private void OnDisable()
+    {
+        if (MusicManager.Instance == null) return;
+        MusicManager.Instance.OnTrackChanged     -= HandleTrackChanged;
+        MusicManager.Instance.OnPlayStateChanged -= HandlePlayStateChanged;
     }
     
-    private void InitializeUI()
+    private void InitializeTrackList()
     {
         List<AudioClip> playlist = MusicManager.Instance.GetPlaylist();
-        Debug.Log($"Инициализация UI музыкального плеера с {playlist.Count} треками.");
-        if (playlist.Count > 0)
-        {
-            CreateTrackList(playlist);
-            UpdateTrackDisplay();
-        }
+        if (playlist.Count == 0) return;
+        CreateTrackList(playlist);
+        SyncUIWithCurrentState();
     }
     
     private void CreateTrackList(List<AudioClip> playlist)
@@ -82,14 +98,40 @@ public class MusicPlayer : MonoBehaviour
     private void SelectTrack(int index)
     {
         MusicManager.Instance.PlayTrack(index);
-        UpdateTrackDisplay();
-        UpdateTrackHighlight();
-        UpdatePlayButtonUI();
+        // UI обновится через события OnTrackChanged + OnPlayStateChanged
     }
     
+    // ──────────────────────────────────────────────
+    // Обработчики событий MusicManager
+    // ──────────────────────────────────────────────
+
+    private void HandleTrackChanged(AudioClip clip, int index)
+    {
+        songNameText.text = clip != null ? clip.name : string.Empty;
+        UpdateTrackHighlight(index);
+    }
+
+    private void HandlePlayStateChanged(bool isPlaying)
+    {
+        UpdatePlayButtonUI(isPlaying);
+    }
+
+    private void SyncUIWithCurrentState()
+    {
+        if (MusicManager.Instance == null) return;
+        AudioClip clip = MusicManager.Instance.GetCurrentClip();
+        songNameText.text = clip != null ? clip.name : string.Empty;
+        UpdateTrackHighlight(MusicManager.Instance.GetCurrentTrackIndex());
+        UpdatePlayButtonUI(MusicManager.Instance.IsPlaying());
+    }
+
+    // ──────────────────────────────────────────────
+    // Update — только прогресс-бар (плавная анимация)
+    // ──────────────────────────────────────────────
+
     private void Update()
     {
-        // Обновляем прогресс
+        if (MusicManager.Instance == null) return;
         AudioClip clip = MusicManager.Instance.GetCurrentClip();
         if (clip != null && MusicManager.Instance.IsPlaying())
         {
@@ -97,64 +139,39 @@ public class MusicPlayer : MonoBehaviour
             UpdateTimeDisplay();
         }
     }
+
+    // ──────────────────────────────────────────────
+    // Кнопки управления
+    // ──────────────────────────────────────────────
     
     public void TogglePlay()
     {
         if (MusicManager.Instance.GetPlaylist().Count == 0) return;
-        
         if (MusicManager.Instance.IsPlaying())
-        {
             MusicManager.Instance.Pause();
-        }
         else
-        {
             MusicManager.Instance.Play();
-            UpdateTrackHighlight();
-        }
-        
-        UpdatePlayButtonUI();
+        // UI обновится через событие OnPlayStateChanged
     }
-    
+
     public void PlayNext()
     {
         MusicManager.Instance.PlayNext();
-        UpdateTrackDisplay();
-        UpdateTrackHighlight();
-        UpdatePlayButtonUI();
+        // UI обновится через события OnTrackChanged
     }
-    
+
     public void PlayPrevious()
     {
         MusicManager.Instance.PlayPrevious();
-        UpdateTrackDisplay();
-        UpdateTrackHighlight();
-        UpdatePlayButtonUI();
+        // UI обновится через событие OnTrackChanged
     }
     
-    private void UpdateTrackHighlight()
+    private void UpdateTrackHighlight(int currentIndex)
     {
-        int currentIndex = MusicManager.Instance.GetCurrentTrackIndex();
-        
-        // Обновляем выделение всех треков
         for (int i = 0; i < trackItems.Count; i++)
         {
-            if (i == currentIndex)
-            {
-                trackItems[i].SetSelected();
-            }
-            else
-            {
-                trackItems[i].SetNormal();
-            }
-        }
-    }
-    
-    private void UpdateTrackDisplay()
-    {
-        AudioClip clip = MusicManager.Instance.GetCurrentClip();
-        if (clip != null)
-        {
-            songNameText.text = clip.name;
+            if (i == currentIndex) trackItems[i].SetSelected();
+            else                   trackItems[i].SetNormal();
         }
     }
     
@@ -173,9 +190,9 @@ public class MusicPlayer : MonoBehaviour
         }
     }
     
-    private void UpdatePlayButtonUI()
+    private void UpdatePlayButtonUI(bool isPlaying)
     {
-        // Можно изменить спрайт кнопки в зависимости от состояния
+        // Здесь можно сменить спрайт кнопки в зависимости от состояния
     }
     
     private void OnProgressChanged(float value)

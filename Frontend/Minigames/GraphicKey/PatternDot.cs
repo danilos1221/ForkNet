@@ -23,17 +23,9 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
     public Color selectedColor = new Color(0.2f, 0.9f, 1f);    // неоновый циан
 
     [Header("Neon glow")]
-    [Tooltip("Создаётся автоматически в Awake() через EnsureGlow() — не назначайте вручную.")]
+    [Tooltip("Создаётся автоматически контроллером (PathPuzzleController.Initialize() → EnsureGlow()) " +
+             "и живёт в общем слое glowLayer, а не внутри самой точки — не назначайте вручную.")]
     public Image glowImage;
-    [Tooltip("Sorting Order отдельного (nested) Canvas на самой точке. Нужен, чтобы точка гарантированно " +
-             "рисовалась выше стен (PathPuzzleController.wallSortingOrder), даже если фон использует override Canvas.")]
-    public int dotSortingOrder = 0;
-    [Tooltip("Sorting Order отдельного (nested) Canvas на glow-объекте. Glow физически лежит внутри " +
-             "точки, поэтому без override-канваса рисовался бы вместе с точкой поверх стен.\n\n" +
-             "Должен быть БОЛЬШЕ PathPuzzleController.backgroundSortingOrder (иначе glow провалится под " +
-             "фон) и МЕНЬШЕ PathPuzzleController.wallSortingOrder (иначе окажется НАД стеной). Итоговый " +
-             "порядок слоёв, от заднего к переднему: фон → glow → стена → сама точка (без Canvas).")]
-    public int glowSortingOrder = -50;
     [Tooltip("Во сколько раз свечение больше самой точки.")]
     public float glowScale = 2.4f;
     [Tooltip("Базовая альфа свечения в состоянии покоя.")]
@@ -61,15 +53,11 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
         // Смещаем фазу пульсации у каждой точки, чтобы вся сетка не "дышала" синхронно.
         _idlePulseSeed = Random.Range(0f, Mathf.PI * 2f);
 
-        EnsureDotLayering();
-
-        // Glow теперь живёт прямо внутри самой точки (см. EnsureGlow()), а не
-        // в linesParent, поэтому ему больше не нужна мировая позиция точки —
-        // можно создавать сразу в Awake(), не дожидаясь, пока GridLayoutGroup
-        // расставит точки по местам. Нужный порядок отрисовки (glow → стена →
-        // точка) теперь обеспечивается не иерархией, а отдельным Canvas с
-        // overrideSorting на glow-объекте — см. glowSortingOrder.
-        EnsureGlow();
+        // Glow создаётся не здесь: ему нужна финальная мировая позиция точки
+        // (после того, как GridLayoutGroup расставит точки по местам), а также
+        // общий контейнер glowLayer — оба доступны только в
+        // PathPuzzleController.Initialize(), который и вызывает EnsureGlow()
+        // для каждой точки после пересчёта layout'а.
         EnsureIcon();
         ApplyIdleColor();
     }
@@ -142,19 +130,6 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
         trySelectMethod.Invoke(instance, new object[] { this });
     }
 
-    void EnsureDotLayering()
-    {
-        var canvas = GetComponent<Canvas>();
-        if (canvas == null) canvas = gameObject.AddComponent<Canvas>();
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = dotSortingOrder;
-
-        // Для nested Canvas нужен собственный GraphicRaycaster, иначе IPointerDown/IPointerEnter
-        // на точке может не приходить от EventSystem (особенно после перевода точки на overrideSorting).
-        if (GetComponent<GraphicRaycaster>() == null)
-            gameObject.AddComponent<GraphicRaycaster>();
-    }
-
     public void Select()
     {
         _isSelected = true;
@@ -211,24 +186,19 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
     // ───────────── Свечение (текстура генерируется в коде, без внешних спрайтов) ─────────────
 
     /// <summary>
-    /// Создаёт (или переиспользует, если уже существует и жив) квадрат свечения
-    /// точки как ДОЧЕРНИЙ объект самой точки. В отличие от старой версии, ему
-    /// больше не нужна мировая позиция точки (WorldToLinesParentLocal) и внешний
-    /// parent (linesParent) — он просто центрируется внутри точки, поэтому его
-    /// можно создавать сразу в Awake().
+    /// Создаёт (если ещё не существует) и позиционирует свечение точки внутри
+    /// общего слоя glowLayer (см. PathPuzzleController.EnsureGlowLayer()).
     ///
-    /// Порядок отрисовки строится на явных override Canvas, а не на иерархии:
-    /// nested Canvas с overrideSorting не "вставляется между соседями" — он
-    /// выдёргивает всё своё поддерево целиком раньше/позже ВСЕГО обычного (без
-    /// Canvas) батча, поэтому сравнивать его напрямую с несколькими разными
-    /// implicit-элементами (например, и с фоном, и со стеной одновременно)
-    /// нельзя одним числом. Поэтому у фона и у стены тоже есть свои explicit
-    /// Canvas (см. PathPuzzleController.backgroundSortingOrder / wallSortingOrder) —
-    /// тогда сравнение "фон vs glow vs стена" превращается в обычное число-к-числу.
-    /// Итоговый порядок, от заднего к переднему: фон → glow → стена → сама точка
-    /// (у точки своего override нет — она остаётся в обычном батче, т.е. поверх всего).
+    /// В отличие от старой версии, glow больше НЕ является дочерним объектом
+    /// самой точки — он живёт в отдельном общем контейнере. Порядок отрисовки
+    /// теперь задаётся исключительно местом этого контейнера в иерархии
+    /// (sibling index), без единого override Canvas: glowLayer лежит раньше
+    /// (то есть визуально ниже) контейнеров со стенами/линиями пути и точками —
+    /// см. PathPuzzleController.EnforceLayerOrder(). Поэтому позицию нужно
+    /// передавать явно: вызывающая сторона (контроллер) знает мировую позицию
+    /// точки уже после того, как GridLayoutGroup расставил её по месту.
     /// </summary>
-    public Image EnsureGlow()
+    public Image EnsureGlow(RectTransform glowParent, Vector2 anchoredPosition)
     {
         // glowImage может быть "мёртвой" ссылкой на уже уничтоженный объект
         // (например, если Awake() почему-то отработал повторно) — Unity в этом
@@ -237,11 +207,9 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
         {
             var go = new GameObject($"Glow_{name}", typeof(RectTransform));
             var rt = go.GetComponent<RectTransform>();
-            rt.SetParent(transform, false);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = Vector2.zero;
 
             RectTransform selfRt = image != null ? image.rectTransform : GetComponent<RectTransform>();
             Vector2 baseSize = selfRt != null ? selfRt.sizeDelta : new Vector2(100, 100);
@@ -250,16 +218,10 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
             glowImage = go.AddComponent<Image>();
             glowImage.sprite = GetGlowSprite();
             glowImage.raycastTarget = false; // свечение не должно перехватывать клики/hover курсора
-
-            // Отдельный Canvas + overrideSorting "выдёргивает" glow из обычного
-            // порядка отрисовки (в котором он иначе рисовался бы как часть точки,
-            // т.е. поверх стен) и кладёт его в самый низ независимо от места в иерархии.
-            var canvas = go.AddComponent<Canvas>();
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = glowSortingOrder;
         }
 
-        glowImage.rectTransform.SetAsFirstSibling(); // ниже иконки блокиратора и т.п. внутри самой точки
+        glowImage.rectTransform.SetParent(glowParent, false);
+        glowImage.rectTransform.anchoredPosition = anchoredPosition;
 
         ApplyIdleColor(); // сразу выставить цвет/альфу свечения согласно текущему type
 

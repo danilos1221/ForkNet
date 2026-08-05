@@ -16,7 +16,6 @@ public class ChatItem : MonoBehaviour
     private void Start()
     {
         selectButton.onClick.AddListener(OnSelect);
-        HideUnreadIndicator();
     }
 
     public void SetupChat(string id, string chatName, Sprite avatar, System.Action<string> onSelect)

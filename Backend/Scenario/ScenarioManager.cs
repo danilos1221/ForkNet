@@ -86,6 +86,7 @@ public class ScenarioManager : MonoBehaviour
 
         chatManager?.HideTypingIndicator();
         chatManager?.ClearChoiceButtons();
+        chatManager?.HideInputPrompt();
 
         isShowingNPCMessage = false;
     }
@@ -190,8 +191,19 @@ public class ScenarioManager : MonoBehaviour
             choiceMessage.choices,
             idx => selectedIndex = idx);
 
-        yield return new WaitUntil(() => selectedIndex >= 0);
+        // Кнопки выбора остаются на экране после клика — игрок может
+        // сменить вариант сколько угодно раз. Сообщение появится в чате
+        // и переход произойдёт только после нажатия кнопки подтверждения.
+        chatManager.ShowInputPrompt("[Подтвердить выбор:]");
 
+        inputVersion++;
+        int myInput = inputVersion;
+
+        yield return new WaitUntil(() =>
+            selectedIndex >= 0 &&
+            inputVersion > myInput);
+
+        chatManager.HideInputPrompt();
         chatManager.ClearChoiceButtons();
 
         if (selectedIndex >= 0 && selectedIndex < choiceMessage.choices.Count)
@@ -328,6 +340,79 @@ public class ScenarioManager : MonoBehaviour
     }
 
     // ──────────────────────────────────────────────
+    // Фоновая доставка сообщений из сценария (GameEventManager)
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Доставляет в фоне (окно чата не открыто) сообщения чата, начиная с текущего
+    /// сохранённого прогресса, — ровно те, что уже прописаны в .txt сценарии чата.
+    /// Останавливается, как только доходит до реплики игрока или выбора (для них
+    /// нужен реальный ввод), либо когда сценарий чата заканчивается.
+    /// </summary>
+    public void DeliverBackgroundMessages(string chatId)
+    {
+        Chat chat = chatDatabase?.chats.Find(c => c.id == chatId);
+        if (chat == null || chat.messages.Count == 0) return;
+
+        int startIndex = gameData != null ? gameData.GetChatProgress(chatId) : 0;
+        ChatMessage current = ResolveFromIndex(chat, startIndex);
+
+        while (current != null)
+        {
+            if (current.senderId == "player" || current.type == "choice")
+                break; // дальше нужен реальный ввод игрока — остановимся здесь
+
+            if (IsGotoOnlyMessage(current))
+            {
+                current = ResolveFromId(chat, current.@goto);
+                continue;
+            }
+
+            chatManager?.AddMessageToChat(chatId, current);
+
+            current = !string.IsNullOrEmpty(current.@goto)
+                ? ResolveFromId(chat, current.@goto)
+                : ResolveFromIndex(chat, chat.messages.IndexOf(current) + 1);
+        }
+
+        int nextIndex = current != null ? chat.messages.IndexOf(current) : chat.messages.Count;
+        if (nextIndex < 0) nextIndex = chat.messages.Count;
+        bool isCompleted = nextIndex >= chat.messages.Count;
+
+        gameData?.SetChatProgress(chatId, nextIndex, isCompleted);
+
+        if (isCompleted)
+            GameEventManager.Instance?.NotifyChatCompleted(chatId);
+    }
+
+    private static ChatMessage ResolveFromIndex(Chat chat, int startIndex)
+    {
+        int index = startIndex;
+        while (index >= 0 && index < chat.messages.Count)
+        {
+            ChatMessage current = chat.messages[index];
+            EnsureMessageHasId(current, index);
+
+            if (IsLabelMarker(current) || IsEndBlockMessage(current))
+            {
+                index++;
+                continue;
+            }
+
+            return current;
+        }
+        return null;
+    }
+
+    private static ChatMessage ResolveFromId(Chat chat, string messageId)
+    {
+        if (string.IsNullOrEmpty(messageId)) return null;
+
+        int index = chat.messages.FindIndex(m => m.id == messageId);
+        return index < 0 ? null : ResolveFromIndex(chat, index);
+    }
+
+    // ──────────────────────────────────────────────
     // Прогресс
     // ──────────────────────────────────────────────
 
@@ -358,6 +443,9 @@ public class ScenarioManager : MonoBehaviour
         }
 
         gameData.SetChatProgress(currentChat.id, nextIndex, isCompleted);
+
+        if (isCompleted)
+            GameEventManager.Instance?.NotifyChatCompleted(currentChat.id);
     }
 
     /// <summary>

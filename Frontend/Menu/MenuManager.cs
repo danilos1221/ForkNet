@@ -15,23 +15,30 @@ using TMPro;
 /// PhoneNavigationManager указан как gameMenuScreen — иначе
 /// currentScreen.TryGetComponent&lt;INavigableScreen&gt;() его не найдёт.
 /// </summary>
-public class MenuManager : MonoBehaviour, INavigableScreen
+public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
 {
     [Header("Панели верхнего уровня")]
-    [SerializeField] private GameObject loadPanel;
-    [SerializeField] private GameObject savePanel;
+    [SerializeField] private GameObject savePanel;   // панель со слотами сохранений
     [SerializeField] private GameObject settingsPanel;
 
     [Header("Кнопки главного меню")]
-    [SerializeField] private Button loadButton;
+    [Tooltip("Кнопка, открывающая панель со слотами сохранений")]
     [SerializeField] private Button saveButton;
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button exitButton;
 
     [Header("Кнопки закрытия панелей верхнего уровня")]
-    [SerializeField] private Button closeLoadButton;
     [SerializeField] private Button closeSaveButton;
     [SerializeField] private Button closeSettingsButton;
+
+    [Header("Панель действий над выбранным слотом")]
+    [SerializeField] private GameObject slotActionPanel;
+    [SerializeField] private Button saveSlotActionButton;
+    [SerializeField] private Button loadSlotActionButton;
+    [SerializeField] private Button deleteSlotActionButton;
+    [SerializeField] private Button closeSlotActionButton;
+    [Tooltip("Необязательно: заголовок в панели действий (например: 'Слот 3')")]
+    [SerializeField] private TextMeshProUGUI slotActionTitleText;
 
     [Header("Под-панели настроек (открываются поверх settingsPanel)")]
     [SerializeField] private GameObject changeDesktopPanel;
@@ -56,6 +63,10 @@ public class MenuManager : MonoBehaviour, INavigableScreen
     private readonly Stack<GameObject> panelHistory = new();
     private GameObject currentPanel; // null = ни одна панель не открыта
 
+    private int _selectedSlotIndex = -1;
+    private SaveSystem _saveSystem;
+    private SavePanelController _savePanelController;
+
     public bool CheatsEnabled { get; private set; }
 
     private void OnEnable()
@@ -67,14 +78,20 @@ public class MenuManager : MonoBehaviour, INavigableScreen
 
     private void Start()
     {
-        loadButton.onClick.AddListener(() => OpenPanel(loadPanel));
-        saveButton.onClick.AddListener(() => OpenPanel(savePanel));
-        settingsButton.onClick.AddListener(() => OpenPanel(settingsPanel));
-        exitButton.onClick.AddListener(ExitGame);
+        _saveSystem = FindAnyObjectByType<SaveSystem>();
+        _savePanelController = FindAnyObjectByType<SavePanelController>();
 
-        closeLoadButton.onClick.AddListener(ClosePanel);
-        closeSaveButton.onClick.AddListener(ClosePanel);
-        closeSettingsButton.onClick.AddListener(ClosePanel);
+        if (saveButton != null) saveButton.onClick.AddListener(() => OpenPanel(savePanel));
+        if (settingsButton != null) settingsButton.onClick.AddListener(() => OpenPanel(settingsPanel));
+        if (exitButton != null) exitButton.onClick.AddListener(ExitGame);
+
+        if (closeSaveButton != null) closeSaveButton.onClick.AddListener(ClosePanel);
+        if (closeSettingsButton != null) closeSettingsButton.onClick.AddListener(ClosePanel);
+
+        if (saveSlotActionButton != null) saveSlotActionButton.onClick.AddListener(SaveSelectedSlot);
+        if (loadSlotActionButton != null) loadSlotActionButton.onClick.AddListener(LoadSelectedSlot);
+        if (deleteSlotActionButton != null) deleteSlotActionButton.onClick.AddListener(DeleteSelectedSlot);
+        if (closeSlotActionButton != null) closeSlotActionButton.onClick.AddListener(ClosePanel);
 
         changeDesktopButton.onClick.AddListener(() => OpenPanel(changeDesktopPanel));
         changeNamesButton.onClick.AddListener(() => OpenPanel(changeNamesPanel));
@@ -138,14 +155,65 @@ public class MenuManager : MonoBehaviour, INavigableScreen
             currentPanel.SetActive(true);
     }
 
+    /// <summary>
+    /// Открыть панель действий для конкретного слота (Сохранить / Загрузить).
+    /// Вызывается из SaveSlotUI при нажатии на ячейку слота.
+    /// </summary>
+    public void OpenSlotActionPanel(int slotIndex)
+    {
+        _selectedSlotIndex = slotIndex;
+
+        // Показываем номер слота в заголовке панели действий
+        if (slotActionTitleText != null)
+            slotActionTitleText.text = $"Слот {slotIndex + 1}";
+
+        // Кнопка загрузки недоступна, если слот пустой
+        if (loadSlotActionButton != null && _saveSystem != null)
+        {
+            SaveSlotInfo info = _saveSystem.GetSlotInfo(slotIndex);
+            loadSlotActionButton.interactable = info != null && !info.isEmpty;
+        }
+
+        // Кнопка удаления недоступна, если слот пустой
+        if (deleteSlotActionButton != null && _saveSystem != null)
+        {
+            SaveSlotInfo info = _saveSystem.GetSlotInfo(slotIndex);
+            deleteSlotActionButton.interactable = info != null && !info.isEmpty;
+        }
+
+        OpenPanel(slotActionPanel);
+    }
+
+    private void SaveSelectedSlot()
+    {
+        if (_selectedSlotIndex < 0 || _saveSystem == null) return;
+        _saveSystem.SaveGameToSlot(_selectedSlotIndex);
+        ClosePanel(); // закрыть панель действий, вернуться к слотам
+    }
+
+    private void LoadSelectedSlot()
+    {
+        if (_selectedSlotIndex < 0 || _saveSystem == null) return;
+        _saveSystem.LoadGameFromSlot(_selectedSlotIndex);
+        ClosePanel();
+    }
+
+    private void DeleteSelectedSlot()
+    {
+        if (_selectedSlotIndex < 0 || _saveSystem == null) return;
+        _saveSystem.DeleteSlot(_selectedSlotIndex);
+        _savePanelController?.RefreshSlots(); // ячейка сразу отобразится пустой
+        ClosePanel();
+    }
+
     /// <summary>Жёстко закрыть все панели и сбросить историю (используется при открытии/закрытии меню).</summary>
     public void CloseAllPanels()
     {
-        loadPanel.SetActive(false);
-        savePanel.SetActive(false);
-        settingsPanel.SetActive(false);
-        changeDesktopPanel.SetActive(false);
-        changeNamesPanel.SetActive(false);
+        if (savePanel != null) savePanel.SetActive(false);
+        if (settingsPanel != null) settingsPanel.SetActive(false);
+        if (changeDesktopPanel != null) changeDesktopPanel.SetActive(false);
+        if (changeNamesPanel != null) changeNamesPanel.SetActive(false);
+        if (slotActionPanel != null) slotActionPanel.SetActive(false);
 
         panelHistory.Clear();
         currentPanel = null;

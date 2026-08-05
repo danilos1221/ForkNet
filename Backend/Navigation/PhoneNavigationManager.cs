@@ -25,6 +25,7 @@ public class PhoneNavigationManager : MonoBehaviour
 
     private readonly Stack<GameObject> history = new();
     private GameObject currentScreen;
+    private DesktopManager desktopManager;
 
     private void Awake()
     {
@@ -41,6 +42,9 @@ public class PhoneNavigationManager : MonoBehaviour
         if (backButton != null) backButton.onClick.AddListener(GoBack);
         if (homeButton != null) homeButton.onClick.AddListener(GoHome);
         if (menuButton != null) menuButton.onClick.AddListener(OpenGameMenu);
+
+        if (homeScreen != null)
+            desktopManager = homeScreen.GetComponent<DesktopManager>();
 
         SetActiveScreenInternal(homeScreen, clearHistory: true);
     }
@@ -125,6 +129,12 @@ public class PhoneNavigationManager : MonoBehaviour
     {
         if (screen == null) return;
         if (clearHistory) history.Clear();
+
+        // Если на рабочем столе телефона было открыто приложение (например, мини-игра
+        // в PasswordGameWindow) — сворачиваем его при переходе на другой экран/меню,
+        // иначе его окно останется висеть поверх/позади нового экрана.
+        if (screen != homeScreen)
+            desktopManager?.MinimizeCurrentApp();
 
         foreach (var s in appScreens)
         {

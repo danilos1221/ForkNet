@@ -56,7 +56,11 @@ public class GameData
     //[System.Obsolete("Legacy поле. Используйте galleryItems с isUnlocked")]
     public List<string> unlockedGalleryItems = new List<string>();
     public Dictionary<string, ChatProgress> chatProgress = new Dictionary<string, ChatProgress>();
-    
+
+    // Игровой пайплайн событий (GameEventManager): именованные флаги истории и id уже сработавших одноразовых событий.
+    public List<string> storyFlags = new List<string>();
+    public List<string> firedEvents = new List<string>();
+
     public void AddCharacter(Character character)
     {
         characters[character.id] = character;
@@ -340,6 +344,47 @@ public class GameData
 
         return history.messages.Exists(
             m => m.messageId == messageId);
+    }
+
+    // ──────────────────────────────────────────────
+    // Игровой пайплайн событий (GameEventManager)
+    // ──────────────────────────────────────────────
+
+    public bool HasStoryFlag(string flag)
+    {
+        return !string.IsNullOrWhiteSpace(flag) && storyFlags != null && storyFlags.Contains(flag);
+    }
+
+    public void SetStoryFlag(string flag)
+    {
+        if (string.IsNullOrWhiteSpace(flag))
+            return;
+
+        storyFlags ??= new List<string>();
+
+        if (!storyFlags.Contains(flag))
+            storyFlags.Add(flag);
+    }
+
+    public void ClearStoryFlag(string flag)
+    {
+        storyFlags?.Remove(flag);
+    }
+
+    public bool HasFiredEvent(string eventId)
+    {
+        return !string.IsNullOrWhiteSpace(eventId) && firedEvents != null && firedEvents.Contains(eventId);
+    }
+
+    public void MarkEventFired(string eventId)
+    {
+        if (string.IsNullOrWhiteSpace(eventId))
+            return;
+
+        firedEvents ??= new List<string>();
+
+        if (!firedEvents.Contains(eventId))
+            firedEvents.Add(eventId);
     }
 
 }

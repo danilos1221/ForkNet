@@ -1,118 +1,55 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 
+/// <summary>
+/// Управляет панелью со слотами сохранений/загрузки.
+/// Ячейки (SaveSlotUI) создаются заранее в инспекторе — этот скрипт их
+/// НЕ создаёт и не удаляет, только инициализирует и обновляет.
+/// Сохранение/загрузка выполняются через MenuManager (панель действий над слотом).
+/// </summary>
 public class SavePanelController : MonoBehaviour
 {
-    [SerializeField] private Transform slotsContainer;  // Grid или другой контейнер для слотов
-    [SerializeField] private GameObject saveSlotPrefab;  // Префаб для слота сохранения
-    [SerializeField] private TextMeshProUGUI statusText;  // Статус операции
-    
-    private SaveSystem saveSystem;
-    private LoadPanelController loadPanelController;
-    private int maxSlots = 5;
-    
-    /*private void Awake()
-    {
+    [Tooltip("Заранее созданные в инспекторе ячейки слотов, по порядку (индекс = номер слота)")]
+    [SerializeField] private List<SaveSlotUI> slots = new();
 
-    }*/
+    private SaveSystem saveSystem;
+    private ISlotActionHost slotActionHost;
+
     private void Start()
     {
         saveSystem = FindAnyObjectByType<SaveSystem>();
-        loadPanelController = FindAnyObjectByType<LoadPanelController>();
-        
-        CreateSaveSlots();
-    }
-    
-    private void OnEnable()
-    {
-        // Обновляем слоты при открытии панели
-        RefreshSlots();
-    }
-    
-    private void CreateSaveSlots()
-    {
+        slotActionHost = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude)
+            .OfType<ISlotActionHost>()
+            .FirstOrDefault();
+
         if (saveSystem == null)
         {
-            Debug.LogError("SavePanelController: SaveSystem не найден на сцене!");
+            Debug.LogError("SavePanelController: SaveSystem не найден!");
             return;
         }
-        
-        if (slotsContainer == null || saveSlotPrefab == null)
+
+        for (int i = 0; i < slots.Count; i++)
         {
-            Debug.LogError("SavePanelController: slotsContainer или saveSlotPrefab не назначены!");
-            return;
-        }
-        
-        // Очищаем контейнер
-        foreach (Transform child in slotsContainer)
-        {
-            Destroy(child.gameObject);
-        }
-        
-        // Создаем слоты
-        for (int i = 0; i < maxSlots; i++)
-        {
-            GameObject slotGO = Instantiate(saveSlotPrefab, slotsContainer);
-            SaveSlotUI slotUI = slotGO.GetComponent<SaveSlotUI>();
-            
-            if (slotUI != null)
-            {
-                SaveSlotInfo info = saveSystem.GetSlotInfo(i);
-                slotUI.Initialize(i, info, this, loadPanelController);
-            }
+            if (slots[i] == null) continue;
+            slots[i].Initialize(i, saveSystem.GetSlotInfo(i), slotActionHost);
         }
     }
-    
-    private void RefreshSlots()
+
+    private void OnEnable()
     {
-        if (slotsContainer == null)
-            return;
-        
-        int slotIndex = 0;
-        foreach (Transform child in slotsContainer)
-        {
-            SaveSlotUI slotUI = child.GetComponent<SaveSlotUI>();
-            if (slotUI != null && saveSystem != null)
-            {
-                SaveSlotInfo info = saveSystem.GetSlotInfo(slotIndex);
-                slotUI.Refresh(info);
-            }
-            slotIndex++;
-        }
+        RefreshSlots();
     }
-    
-    /// <summary>
-    /// Сохранить игру в выбранный слот
-    /// </summary>
-    public void SaveToSlot(int slotIndex)
+
+    public void RefreshSlots()
     {
-        if (saveSystem != null)
+        if (saveSystem == null) return;
+
+        for (int i = 0; i < slots.Count; i++)
         {
-            saveSystem.SaveGameToSlot(slotIndex);
-            
-            if (statusText != null)
-            {
-                statusText.text = $"Сохранено в слот {slotIndex + 1}!";
-            }
-            
-            Debug.Log($"Сохранено в слот {slotIndex}");
-            
-            // Обновляем отображение слотов
-            RefreshSlots();
-            
-            // Закрываем меню через 1 секунду
-            Invoke(nameof(CloseMenu), 1f);
-        }
-    }
-    
-    private void CloseMenu()
-    {
-        MenuManager menuManager = FindAnyObjectByType<MenuManager>();
-        if (menuManager != null)
-        {
-            menuManager.CloseAllPanels();
-            //menuManager.ToggleMenuFromCode();
+            if (slots[i] == null) continue;
+            slots[i].Refresh(saveSystem.GetSlotInfo(i));
         }
     }
 }
+

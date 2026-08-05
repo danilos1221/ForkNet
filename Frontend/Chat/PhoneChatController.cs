@@ -9,17 +9,16 @@ using System.Collections.Generic;
 /// </summary>
 public class PhoneChatController : MonoBehaviour, INavigableScreen
 {
-    [Header("ависимости")]
+    [Header("Зависимости")]
     [SerializeField] private ChatView chatView;
     [SerializeField] private ScenarioManager scenarioManager;
-    [SerializeField] private GalleryManager galleryManager;
 
     [Header("Список чатов (левая панель)")]
     [SerializeField] private Transform chatListContainer;
     [SerializeField] private GameObject chatItemPrefab;
     [SerializeField] private GameObject chatItemPrefabLine;
 
-    [Header("анели (переключение экранов)")]
+    [Header("Панели (переключение экранов)")]
     [SerializeField] private GameObject chatListPanel;
     [SerializeField] private GameObject chatWindowPanel;
 
@@ -46,15 +45,22 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     {
         if (scenarioManager == null)
             scenarioManager = FindAnyObjectByType<ScenarioManager>();
-    }
 
-    private void Start()
-    {
+        // Важно: делаем это в Awake, а не в Start. Окно чата обычно выключено
+        // DesktopManager-ом сразу после старта сцены (SetActive(false) для всех
+        // окон приложений), а значит Start() этого объекта не выполнится, пока
+        // игрок не откроет приложение — но фоновые сообщения (GameEventManager /
+        // ScenarioManager.DeliverBackgroundMessages) должны находить чат в базе
+        // ещё до этого. Awake выполняется всегда, независимо от активности окна.
         gameData     = GameManager.Instance.GameData ?? new GameData();
         chatDatabase = GameManager.Instance.ChatDatabase;
 
         InitializeChatList();
+        RestoreUnreadIndicators();
+    }
 
+    private void Start()
+    {
         if (chatView != null)
             chatView.OnSubmitPressed += OnSubmitButtonClicked;
 
@@ -106,7 +112,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     public void HideTypingIndicator()                   => chatView?.HideTypingIndicator();
     public void UpdateTypingIndicatorText(string text)  => chatView?.UpdateTypingIndicatorText(text);
     public void SetStatusText(string text)              => chatView?.SetStatusText(text);
-    public void ShowInputPrompt()                       => chatView?.ShowInputPrompt();
+    public void ShowInputPrompt(string promptText = null)       => chatView?.ShowInputPrompt(promptText);
     public void HideInputPrompt()                       => chatView?.HideInputPrompt();
 
     public void SpawnChoiceButtons(List<ChatChoice> choices, System.Action<int> onSelected)
@@ -152,6 +158,9 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         RestoreMessageHistory(chatId);
         chatItems.GetValueOrDefault(chatId)?.HideUnreadIndicator();
 
+        if (chat != null)
+            gameData?.MarkChatAsRead(chatId, chat.messages.Count);
+
         ShowChatWindowInternal();
         scenarioManager.PlayDialogue(chatId);
     }
@@ -161,7 +170,10 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     public string GetSelectedChatId() => selectedChatId;
 
     public bool IsChatOpen(string chatId) =>
-        !string.IsNullOrEmpty(selectedChatId) && selectedChatId == chatId;
+        !string.IsNullOrEmpty(selectedChatId) &&
+        selectedChatId == chatId &&
+        chatWindowPanel != null &&
+        chatWindowPanel.activeSelf;
 
     /// <summary>ызывается DesktopManager при запуске — создаёт список ChatItem один раз.</summary>
     public void InitializeChatUI() => InitializeChatList();
@@ -191,21 +203,47 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         Chat chat = FindChatById(chatId);
         if (chat == null) return;
 
-        bool alreadyExists = chat.messages.Exists(m =>
-            m.text      == message.text      &&
-            m.senderId  == message.senderId  &&
-            m.timestamp == message.timestamp);
+        if (string.IsNullOrEmpty(message.id))
+            message.id = $"runtime_{chatId}_{System.DateTime.UtcNow.Ticks}";
 
-        if (!alreadyExists)
+        // Дедупликация — по факту доставки (сохранён в истории), а не по наличию
+        // в chat.messages: сообщения из сценария (фоновая доставка) и так уже
+        // лежат в chat.messages (это распарсенный .txt), так что проверка по этому
+        // списку всегда считала бы их "уже существующими" и обрывала обработку.
+        bool alreadyDelivered = gameData != null && gameData.HasMessageInHistory(chatId, message.id);
+        if (alreadyDelivered)
+            return;
+
+        if (!chat.messages.Contains(message))
             chat.messages.Add(message);
 
         if (IsChatOpen(chatId))
+        {
             DisplayMessage(message);
+            gameData?.MarkChatAsRead(chatId, chat.messages.Count);
+        }
         else
+        {
+            gameData?.AddUnreadMessage(chatId);
             chatItems.GetValueOrDefault(chatId)?.ShowUnreadIndicator();
+        }
 
-        string preview = !string.IsNullOrEmpty(message.imageId) ? "[ото]" : message.text;
+        gameData?.AddMessageToHistory(chatId, message);
+
+        string preview = !string.IsNullOrEmpty(message.imageId) ? "[фото]" : message.text;
         chatItems.GetValueOrDefault(chatId)?.UpdatePreview(preview);
+    }
+
+    private void RestoreUnreadIndicators()
+    {
+        foreach (var pair in chatItems)
+        {
+            int unreadCount = gameData?.GetUnreadMessageCount(pair.Key) ?? 0;
+            if (unreadCount > 0)
+                pair.Value?.ShowUnreadIndicator();
+            else
+                pair.Value?.HideUnreadIndicator();
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -292,8 +330,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void UnlockGalleryItem(string itemId)
     {
-        var galMgr = galleryManager != null ? galleryManager : FindAnyObjectByType<GalleryManager>();
-        galMgr?.UnlockGalleryItem(itemId);
+        GalleryService.Instance?.UnlockItem(itemId);
     }
 
     private void OnSubmitButtonClicked()

@@ -12,50 +12,49 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
     [SerializeField] private List<string> allGalleryItemIds = new List<string>();
     [SerializeField] private Sprite lockedPlaceholderSprite;
 
-    private GameData gameData;
-    private readonly Dictionary<string, GalleryItemUI> galleryItemUIs = new Dictionary<string, GalleryItemUI>();
-    private readonly Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
+    private readonly Dictionary<string, GalleryItemUI> galleryItemUIs = new();
+
+    // ──────────────────────────────────────────────
+    // Unity lifecycle
+    // ──────────────────────────────────────────────
 
     private void Awake()
     {
-        // На старте фуллскрин должен быть скрыт
         if (fullscreenView != null)
             fullscreenView.gameObject.SetActive(false);
     }
 
     private void Start()
     {
-        InitializeData();
         RefreshGallery();
         ShowGrid();
     }
 
-    private void InitializeData()
+    private void OnEnable()
     {
-        if (gameData == null)
-            gameData = GameManager.Instance.GameData;
+        if (GalleryService.Instance != null)
+            GalleryService.Instance.OnItemUnlocked += OnItemUnlockedHandler;
+    }
+
+    private void OnDisable()
+    {
+        if (GalleryService.Instance != null)
+            GalleryService.Instance.OnItemUnlocked -= OnItemUnlockedHandler;
     }
 
     public void RefreshGallery()
     {
-        InitializeData();
-
         if (imageGrid == null || galleryItemPrefab == null) return;
 
         foreach (Transform child in imageGrid)
-        {
             Destroy(child.gameObject);
-        }
 
         galleryItemUIs.Clear();
 
-        List<GalleryImageData> items = gameData.GetGalleryItems();
-        for (int i = 0; i < items.Count; i++)
+        List<GalleryImageData> items = GalleryService.Instance.GetAllItems();
+        foreach (GalleryImageData item in items)
         {
-            GalleryImageData item = items[i];
-            if (item == null || string.IsNullOrWhiteSpace(item.itemId))
-                continue;
-
+            if (item == null || string.IsNullOrWhiteSpace(item.itemId)) continue;
             CreateGalleryItemUI(item);
         }
     }
@@ -75,37 +74,19 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     private void SelectItem(string itemId)
     {
-        if (!gameData.IsGalleryItemUnlocked(itemId))
-            return;
-
-        Sprite sprite = GetGallerySprite(itemId);
-        if (sprite == null)
-            return;
-
+        if (!GalleryService.Instance.IsUnlocked(itemId)) return;
+        Sprite sprite = GalleryService.Instance.GetSprite(itemId);
+        if (sprite == null) return;
         OpenFullscreenView(sprite, itemId);
     }
 
     private void UpdateGalleryItemUI(string itemId)
     {
-        if (!galleryItemUIs.TryGetValue(itemId, out GalleryItemUI itemUI) || itemUI == null)
-            return;
-
-        GalleryImageData data = gameData.GetGalleryItem(itemId);
-        if (data == null)
-            return;
-
-        Sprite unlockedSprite = data.isUnlocked ? GetGallerySprite(itemId) : null;
+        if (!galleryItemUIs.TryGetValue(itemId, out GalleryItemUI itemUI) || itemUI == null) return;
+        GalleryImageData data = GalleryService.Instance.GetItem(itemId);
+        if (data == null) return;
+        Sprite unlockedSprite = data.isUnlocked ? GalleryService.Instance.GetSprite(itemId) : null;
         itemUI.UpdateVisual(data.isUnlocked, unlockedSprite, lockedPlaceholderSprite);
-    }
-
-    private Sprite GetGallerySprite(string itemId)
-    {
-        if (spriteCache.TryGetValue(itemId, out Sprite cached))
-            return cached;
-
-        Sprite loaded = Resources.Load<Sprite>($"Images/Gallery/{itemId}");
-        spriteCache[itemId] = loaded;
-        return loaded;
     }
 
     private void OpenFullscreenView(Sprite sprite, string itemId)
@@ -127,20 +108,19 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     public void UnlockGalleryItem(string itemId)
     {
-        InitializeData();
+        // Делегируем в сервис. Обновление UI случится в OnItemUnlockedHandler через событие.
+        GalleryService.Instance?.UnlockItem(itemId);
+    }
 
-        bool changed = gameData.UnlockGalleryItem(itemId);
-        if (!changed)
-            return;
-
+    // Обработчик события GalleryService.OnItemUnlocked
+    private void OnItemUnlockedHandler(string itemId)
+    {
         if (!galleryItemUIs.ContainsKey(itemId))
         {
-            GalleryImageData item = gameData.GetGalleryItem(itemId);
-            if (item != null)
-                CreateGalleryItemUI(item);
+            GalleryImageData item = GalleryService.Instance.GetItem(itemId);
+            if (item != null) CreateGalleryItemUI(item);
             return;
         }
-
         UpdateGalleryItemUI(itemId);
     }
 
