@@ -26,10 +26,10 @@ public class SaveSlotUI : MonoBehaviour
     public void Refresh(SaveSlotInfo info)
     {
         if (slotNumberText != null)
-            slotNumberText.text = $"Слот {slotIndex + 1}";
+            slotNumberText.text = $"Slot {slotIndex + 1}";
 
         if (dateText != null)
-            dateText.text = info.isEmpty ? "Пусто" : info.saveDate;
+            dateText.text = info.isEmpty ? "Empty" : info.saveDate;
 
         if (slotImage != null)
             slotImage.color = info.isEmpty ? emptySlotColor : filledSlotColor;

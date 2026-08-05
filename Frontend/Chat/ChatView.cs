@@ -190,7 +190,7 @@ public class ChatView : MonoBehaviour
     public void ShowInputPrompt(string promptText = null)
     {
         if (inputPromptText == null) return;
-        inputPromptText.text = promptText ?? "[Написать сообщение:]";
+        inputPromptText.text = promptText ?? "[Send message:]";
         inputPromptText.gameObject.SetActive(true);
         StartButtonPulse();
     }

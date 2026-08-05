@@ -202,7 +202,7 @@ public class PathPuzzleController : MonoBehaviour
         EnforceLayerOrder();
 
         initialized = true;
-        SetStatus("Начните с зелёной точки");
+        SetStatus("Start from the blue dot");
         Debug.Log($"Start = {startDot}, End = {endDot}");
     }
 
@@ -334,7 +334,7 @@ public class PathPuzzleController : MonoBehaviour
         // Блокиратор нельзя выбрать вообще
         if (dot.type == PatternDot.DotType.Blocker)
         {
-            Reject("Эту точку нельзя касаться!");
+            Reject("This point must not be touched!");
             return;
         }
 
@@ -349,13 +349,13 @@ public class PathPuzzleController : MonoBehaviour
         {
             if (IsWall(last, between) || IsWall(between, dot))
             {
-                Reject("Путь перекрыт!");
+                Reject("The path is blocked!");
                 return;
             }
 
             if (between.type == PatternDot.DotType.Blocker)
             {
-                Reject("Путь перекрыт — нельзя касаться этой точки!");
+                Reject("The path is blocked — this point must not be touched!");
                 return;
             }
 
@@ -378,7 +378,7 @@ public class PathPuzzleController : MonoBehaviour
                 bool isDirectPredecessor = lastIdx > 0 && selectedDots[lastIdx - 1] == between;
                 if (!isDirectPredecessor)
                 {
-                    Reject("Нельзя пересекать уже пройденный путь!");
+                    Reject("You cannot cross an already drawn path!");
                     return;
                 }
             }
@@ -388,32 +388,32 @@ public class PathPuzzleController : MonoBehaviour
             // а не только когда between выбирается впервые.
             if (WouldCrossExistingLine(last, between))
             {
-                Reject("Линия пересекает уже нарисованную!");
+                Reject("The line crosses an already drawn path!");
                 return;
             }
             if (WouldCrossWall(last, between))
             {
-                Reject("Линия задевает стену!");
+                Reject("The line touches a wall!");
                 return;
             }
             if (WouldTouchBlocker(last, between))
             {
-                Reject("Линия задевает точку, которую нельзя касаться!");
+                Reject("The line touches a point that must not be touched!");
                 return;
             }
             if (WouldCrossExistingLine(between, dot))
             {
-                Reject("Линия пересекает уже нарисованную!");
+                Reject("The line crosses an already drawn path!");
                 return;
             }
             if (WouldCrossWall(between, dot))
             {
-                Reject("Линия задевает стену!");
+                Reject("The line touches a wall!");
                 return;
             }
             if (WouldTouchBlocker(between, dot))
             {
-                Reject("Линия задевает точку, которую нельзя касаться!");
+                Reject("The line touches a point that must not be touched!");
                 return;
             }
 
@@ -425,25 +425,25 @@ public class PathPuzzleController : MonoBehaviour
         {
             if (IsWall(last, dot))
             {
-                Reject("Путь перекрыт!");
+                Reject("The path is blocked!");
                 return;
             }
 
             if (WouldCrossExistingLine(last, dot))
             {
-                Reject("Линия пересекает уже нарисованную!");
+                Reject("The line crosses an already drawn path!");
                 return;
             }
 
             if (WouldCrossWall(last, dot))
             {
-                Reject("Линия задевает стену!");
+                Reject("The line touches a wall!");
                 return;
             }
 
             if (WouldTouchBlocker(last, dot))
             {
-                Reject("Линия задевает точку, которую нельзя касаться!");
+                Reject("The line touches a point that must not be touched!");
                 return;
             }
         }
@@ -687,13 +687,13 @@ public class PathPuzzleController : MonoBehaviour
 
         if (success)
         {
-            SetStatus("✓ Путь пройден!");
+            SetStatus("The path is passed!");
             locked = true;
             onWin?.Invoke();
         }
         else
         {
-            SetStatus("✗ Не дошли до цели — начните заново");
+            SetStatus("Did not reach the goal — start over");
             ClearAll();
             onFail?.Invoke();
         }
@@ -704,7 +704,7 @@ public class PathPuzzleController : MonoBehaviour
     {
         locked = false;
         ClearAll();
-        SetStatus("Начните с зелёной точки");
+        SetStatus("Start from the blue dot");
     }
 
     // ───────────── Линии (как в PatternLock) ─────────────
