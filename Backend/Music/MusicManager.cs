@@ -56,7 +56,7 @@ public class MusicManager : MonoBehaviour
         // Загружаем все аудиоклипы из папки Resources/Audio
         AudioClip[] clips = Resources.LoadAll<AudioClip>("Audio");
         playlist.AddRange(clips);
-        Debug.Log($"Загружено {playlist.Count} треков в плейлист.");
+        //Debug.Log($"Загружено {playlist.Count} треков в плейлист.");
     }
     
     public List<AudioClip> GetPlaylist()

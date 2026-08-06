@@ -27,6 +27,12 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
              "ссылку нужно назначить явно.")]
     [SerializeField] private PathPuzzleLevelSelector pathPuzzleLevelSelector;
 
+    [Tooltip("Ссылка на GalleryManager. Объект GalleryManager лежит в корне сцены (не внутри окна), " +
+             "а FullscreenGalleryView теперь тоже вынесен в корень (чтобы открываться поверх любого приложения, " +
+             "например из чата). Поэтому GetComponentsInChildren по текущему открытому окну его не находит — " +
+             "проверяем оверлей галереи явно, в первую очередь.")]
+    [SerializeField] private GalleryManager galleryManager;
+
     // State
     private bool iconsCreated = false;
     private DesktopIcon.AppType? currentOpenApp = null;
@@ -229,6 +235,12 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
 
     public bool TryHandleBack()
     {
+        // Полноэкранный просмотр галереи может быть открыт поверх ЛЮБОГО приложения
+        // (например, картинка открыта прямо из чата), а его GameObject лежит в корне сцены,
+        // а не внутри currentOpenApp — поэтому проверяем его первым, отдельно от окон.
+        if (galleryManager != null && galleryManager.TryHandleBack())
+            return true;
+
         if (!currentOpenApp.HasValue) return false;
         
         // Если у окна есть компонент с навигацией, пробуем его

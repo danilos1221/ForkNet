@@ -78,6 +78,11 @@ public class GameLoadManager : MonoBehaviour
 
         saveSystem.ApplyLoadedSave(pendingSave);
 
+        // Галерея могла уже посеять плейсхолдеры в Start() до того, как ApplyLoadedSave
+        // заменил gameData.galleryItems данными из сейва — пересобираем каталог и UI галереи,
+        // чтобы она корректно отражала реально загруженное состояние.
+        FindAnyObjectByType<GalleryManager>()?.RefreshAfterLoad();
+
         pendingSave = null;
 
         Debug.Log("Сохранение успешно применено");

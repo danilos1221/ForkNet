@@ -36,7 +36,7 @@ public class PatternGridGenerator : MonoBehaviour
 
     private void Awake()
     {
-        Debug.Log($"gridParent.position = {gridParent.position}, rect = {gridParent.rect}, lossyScale = {gridParent.lossyScale}");
+        //Debug.Log($"gridParent.position = {gridParent.position}, rect = {gridParent.rect}, lossyScale = {gridParent.lossyScale}");
         if (generateOnAwake)
             Generate();
     }

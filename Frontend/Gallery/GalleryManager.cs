@@ -26,6 +26,20 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     private void Start()
     {
+        GalleryService.Instance?.EnsureItems(allGalleryItemIds);
+        RefreshGallery();
+        ShowGrid();
+    }
+
+    /// <summary>
+    /// Вызывается извне (например, GameLoadManager) после того как сохранение применено.
+    /// SaveSystem.ApplyLoadedSave полностью заменяет gameData.galleryItems данными из сейва,
+    /// стирая плейсхолдеры, посеянные в Start() — без этого вызова сетка остаётся
+    /// визуально в дозагрузочном состоянии и не отражает реально загруженный прогресс.
+    /// </summary>
+    public void RefreshAfterLoad()
+    {
+        GalleryService.Instance?.EnsureItems(allGalleryItemIds);
         RefreshGallery();
         ShowGrid();
     }
@@ -34,6 +48,11 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
     {
         if (GalleryService.Instance != null)
             GalleryService.Instance.OnItemUnlocked += OnItemUnlockedHandler;
+
+        // Пока этот объект был неактивен (например, открыт другой app-window),
+        // подписки на OnItemUnlocked не было — картинки могли разблокироваться
+        // в GameData, но UI об этом не узнал. Досчитываем актуальное состояние.
+        RefreshGallery();
     }
 
     private void OnDisable()
@@ -45,6 +64,7 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
     public void RefreshGallery()
     {
         if (imageGrid == null || galleryItemPrefab == null) return;
+        if (GalleryService.Instance == null) return;
 
         foreach (Transform child in imageGrid)
             Destroy(child.gameObject);
