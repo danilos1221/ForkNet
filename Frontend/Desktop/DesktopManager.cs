@@ -152,6 +152,7 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
         // на котором её свернули в прошлый раз. PathPuzzleController лежит в корне
         // сцены, а не внутри окна, поэтому используем прямую ссылку, а не поиск по детям.
         pathPuzzleLevelSelector?.ResetToSelector();
+        galleryManager?.RefreshGallery();
     }
 
     private bool TryRestoreExistingApp(DesktopIcon.AppType appType)

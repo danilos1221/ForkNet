@@ -71,17 +71,6 @@ public class GalleryService : MonoBehaviour
         return gameData.GetGalleryItems();
     }
 
-    /// <summary>
-    /// Гарантирует, что для каждого id из известного списка есть запись в галерее
-    /// (locked по умолчанию, если ещё не разблокирован). Вызывается GalleryManager-ом
-    /// при старте, чтобы сетка галереи показывала все элементы, а не только разблокированные.
-    /// </summary>
-    public void EnsureItems(IEnumerable<string> allItemIds)
-    {
-        EnsureData();
-        gameData.EnsureGalleryItems(allItemIds);
-    }
-
     public GalleryImageData GetItem(string itemId)
     {
         EnsureData();

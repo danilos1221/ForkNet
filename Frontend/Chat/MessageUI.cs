@@ -59,8 +59,18 @@ public class MessageUI : MonoBehaviour
             return;
         }
         
-        // Находим GalleryManager и открываем полноэкранный вид
-        GalleryManager galleryManager = FindAnyObjectByType<GalleryManager>();
+        // В сцене может быть несколько GalleryManager. Берём активный и включённый.
+        GalleryManager galleryManager = null;
+        GalleryManager[] managers = FindObjectsByType<GalleryManager>();
+        for (int i = 0; i < managers.Length; i++)
+        {
+            if (managers[i] != null && managers[i].isActiveAndEnabled)
+            {
+                galleryManager = managers[i];
+                break;
+            }
+        }
+
         if (galleryManager != null)
         {
             galleryManager.OpenFullscreenViewForImage(sprite, currentImageId);

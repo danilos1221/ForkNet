@@ -277,6 +277,9 @@ public class SaveSystem : MonoBehaviour
 
             gameData.unlockedGalleryItems = new List<string>();
         }
+
+        gameData.CleanupGalleryItemsKeepUnlockedOnly();
+
         gameData.chatHistories =
         save.chatHistories ??
         new List<ChatHistory>();

@@ -9,7 +9,6 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     [SerializeField] private Transform imageGrid;
     [SerializeField] private GameObject galleryItemPrefab;
-    [SerializeField] private List<string> allGalleryItemIds = new List<string>();
     [SerializeField] private Sprite lockedPlaceholderSprite;
 
     private readonly Dictionary<string, GalleryItemUI> galleryItemUIs = new();
@@ -26,7 +25,6 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     private void Start()
     {
-        GalleryService.Instance?.EnsureItems(allGalleryItemIds);
         RefreshGallery();
         ShowGrid();
     }
@@ -34,12 +32,11 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
     /// <summary>
     /// Вызывается извне (например, GameLoadManager) после того как сохранение применено.
     /// SaveSystem.ApplyLoadedSave полностью заменяет gameData.galleryItems данными из сейва,
-    /// стирая плейсхолдеры, посеянные в Start() — без этого вызова сетка остаётся
-    /// визуально в дозагрузочном состоянии и не отражает реально загруженный прогресс.
+    /// поэтому после загрузки нужно пересобрать UI, чтобы отобразить актуально
+    /// разблокированные изображения.
     /// </summary>
     public void RefreshAfterLoad()
     {
-        GalleryService.Instance?.EnsureItems(allGalleryItemIds);
         RefreshGallery();
         ShowGrid();
     }
@@ -63,7 +60,11 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
 
     public void RefreshGallery()
     {
-        if (imageGrid == null || galleryItemPrefab == null) return;
+        if (imageGrid == null || galleryItemPrefab == null)
+        {
+            Debug.LogWarning("[GalleryManager] imageGrid или galleryItemPrefab не назначены. Этот экземпляр галереи не будет рендерить карточки.");
+            return;
+        }
         if (GalleryService.Instance == null) return;
 
         foreach (Transform child in imageGrid)
@@ -72,11 +73,16 @@ public class GalleryManager : MonoBehaviour, INavigableScreen
         galleryItemUIs.Clear();
 
         List<GalleryImageData> items = GalleryService.Instance.GetAllItems();
+        int createdCount = 0;
         foreach (GalleryImageData item in items)
         {
             if (item == null || string.IsNullOrWhiteSpace(item.itemId)) continue;
+            if (!item.isUnlocked) continue;
             CreateGalleryItemUI(item);
+            createdCount++;
         }
+
+        Debug.Log($"[GalleryManager] RefreshGallery: unlocked items rendered = {createdCount}");
     }
 
     private void CreateGalleryItemUI(GalleryImageData item)

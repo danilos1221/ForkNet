@@ -217,6 +217,11 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         if (!chat.messages.Contains(message))
             chat.messages.Add(message);
 
+        // Разблокируем изображение сразу в момент доставки сообщения в чат,
+        // даже если окно чата сейчас закрыто.
+        if (!string.IsNullOrWhiteSpace(message.imageId))
+            UnlockGalleryItem(message.imageId);
+
         if (IsChatOpen(chatId))
         {
             DisplayMessage(message);
@@ -330,7 +335,22 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void UnlockGalleryItem(string itemId)
     {
-        GalleryService.Instance?.UnlockItem(itemId);
+        if (string.IsNullOrWhiteSpace(itemId))
+            return;
+
+        if (GalleryService.Instance != null)
+        {
+            bool changed = GalleryService.Instance.UnlockItem(itemId);
+            Debug.Log($"[PhoneChatController] Gallery unlock via service: {itemId}, changed={changed}");
+            return;
+        }
+
+        // Fallback на случай ранней доставки сообщения до инициализации GalleryService.
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.UnlockGalleryItem(itemId);
+            Debug.Log($"[PhoneChatController] Gallery unlock via fallback GameManager: {itemId}");
+        }
     }
 
     private void OnSubmitButtonClicked()

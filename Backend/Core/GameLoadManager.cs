@@ -78,10 +78,19 @@ public class GameLoadManager : MonoBehaviour
 
         saveSystem.ApplyLoadedSave(pendingSave);
 
-        // Галерея могла уже посеять плейсхолдеры в Start() до того, как ApplyLoadedSave
-        // заменил gameData.galleryItems данными из сейва — пересобираем каталог и UI галереи,
-        // чтобы она корректно отражала реально загруженное состояние.
-        FindAnyObjectByType<GalleryManager>()?.RefreshAfterLoad();
+        // В сцене может существовать несколько GalleryManager (например, случайный компонент
+        // на другом окне). Обновляем все активные экземпляры, чтобы не зависеть от того,
+        // какой именно вернёт FindAnyObjectByType.
+        GalleryManager[] galleryManagers = FindObjectsByType<GalleryManager>();
+
+        for (int i = 0; i < galleryManagers.Length; i++)
+        {
+            GalleryManager manager = galleryManagers[i];
+            if (manager == null || !manager.isActiveAndEnabled)
+                continue;
+
+            manager.RefreshAfterLoad();
+        }
 
         pendingSave = null;
 

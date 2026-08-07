@@ -107,26 +107,6 @@ public class GameData
         }
     }
 
-    public void EnsureGalleryItems(IEnumerable<string> allItemIds)
-    {
-        if (galleryItems == null)
-            galleryItems = new List<GalleryImageData>();
-
-        MigrateLegacyUnlockedGallery();
-
-        if (allItemIds == null)
-            return;
-
-        foreach (string id in allItemIds)
-        {
-            if (string.IsNullOrWhiteSpace(id))
-                continue;
-
-            if (GetGalleryItem(id) == null)
-                galleryItems.Add(new GalleryImageData(id, false));
-        }
-    }
-
     public GalleryImageData GetGalleryItem(string itemId)
     {
         if (galleryItems == null || string.IsNullOrWhiteSpace(itemId))
@@ -180,6 +160,41 @@ public class GameData
 
         MigrateLegacyUnlockedGallery();
         return galleryItems;
+    }
+
+    /// <summary>
+    /// Нормализует состояние галереи: оставляет только валидные и разблокированные элементы,
+    /// удаляет locked-записи от старой логики и дубликаты по itemId.
+    /// </summary>
+    public void CleanupGalleryItemsKeepUnlockedOnly()
+    {
+        if (galleryItems == null)
+        {
+            galleryItems = new List<GalleryImageData>();
+            return;
+        }
+
+        MigrateLegacyUnlockedGallery();
+
+        var uniqueIds = new HashSet<string>();
+        var cleanedItems = new List<GalleryImageData>(galleryItems.Count);
+
+        for (int i = 0; i < galleryItems.Count; i++)
+        {
+            GalleryImageData item = galleryItems[i];
+            if (item == null || string.IsNullOrWhiteSpace(item.itemId))
+                continue;
+
+            if (!item.isUnlocked)
+                continue;
+
+            if (!uniqueIds.Add(item.itemId))
+                continue;
+
+            cleanedItems.Add(new GalleryImageData(item.itemId, true));
+        }
+
+        galleryItems = cleanedItems;
     }
 
     private void MigrateLegacyUnlockedGallery()
