@@ -18,6 +18,7 @@ public class ScenarioManager : MonoBehaviour
     // Inspector-поля
     // ──────────────────────────────────────────────
     private int seqCounter;
+    private bool wasChoiceSelected = false;
     private int dialogueGeneration;
     private int inputVersion;
     [Header("Зависимости")]
@@ -160,6 +161,7 @@ public class ScenarioManager : MonoBehaviour
 
                     current = GetNextMessage(current);
                     Debug.Log($"SEQ {id} NEXT chat={processingChatId} msg={(current != null ? current.type : "<end>")} gen={gen}");
+                    wasChoiceSelected = false;
                 }
 
                 SaveProgress(current);
@@ -194,7 +196,7 @@ public class ScenarioManager : MonoBehaviour
         // Кнопки выбора остаются на экране после клика — игрок может
         // сменить вариант сколько угодно раз. Сообщение появится в чате
         // и переход произойдёт только после нажатия кнопки подтверждения.
-        chatManager.ShowInputPrompt("[Подтвердить выбор:]");
+        chatManager.ShowInputPrompt("[Confirm selection:]");
 
         inputVersion++;
         int myInput = inputVersion;
@@ -205,7 +207,7 @@ public class ScenarioManager : MonoBehaviour
 
         chatManager.HideInputPrompt();
         chatManager.ClearChoiceButtons();
-
+        /*
         if (selectedIndex >= 0 && selectedIndex < choiceMessage.choices.Count)
         {
             ChatChoice selected = choiceMessage.choices[selectedIndex];
@@ -229,7 +231,10 @@ public class ScenarioManager : MonoBehaviour
         else
         {
             Debug.LogWarning("[ScenarioManager] Выбор вышел за пределы диапазона.");
-        }
+        }*/
+        ChatChoice selected = choiceMessage.choices[selectedIndex];
+        currentMessageId = selected.@goto;
+        wasChoiceSelected = true;
     }
 
     private IEnumerator HandleRegularMessage(ChatMessage message, string chatId, int gen)
@@ -251,10 +256,12 @@ public class ScenarioManager : MonoBehaviour
 
         //Debug.Log($"dialogueGeneration={dialogueGeneration} inputVersion={inputVersion} myInput={myInput} chat={chatId} gen={gen}");
         //Debug.Log($"PLAYER WAIT START msg={message.id}");
-        yield return new WaitUntil(() =>
-            gen == dialogueGeneration &&
-            inputVersion > myInput &&
-            IsProcessingChatActive(chatId));
+        if(!wasChoiceSelected){
+            yield return new WaitUntil(() =>
+                gen == dialogueGeneration &&
+                inputVersion > myInput &&
+                IsProcessingChatActive(chatId));
+        }
         //Debug.Log($"PLAYER WAIT END msg={message.id}");
         if (gen != dialogueGeneration)
             yield break;
