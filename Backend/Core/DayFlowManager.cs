@@ -18,9 +18,12 @@ public class DayFlowManager : MonoBehaviour
     [SerializeField] private float blackScreenHoldDuration = 0.1f;
     [SerializeField] private Color fadeColor = Color.black;
     [SerializeField] private DesktopManager desktopManager;
+    [Header("UI завершения дня")]
+    [SerializeField] private GameObject endDayButton;
 
     private GameData gameData;
     private bool isTransitionInProgress;
+    private bool lastEndDayButtonVisibleState;
     private Canvas transitionCanvas;
     private CanvasGroup transitionCanvasGroup;
     private Image transitionImage;
@@ -51,6 +54,12 @@ public class DayFlowManager : MonoBehaviour
             return;
 
         gameData.SetCurrentDay(gameData.currentDay);
+        RefreshEndDayButton();
+    }
+
+    private void Update()
+    {
+        RefreshEndDayButtonRuntime();
     }
 
     private void OnDestroy()
@@ -67,12 +76,18 @@ public class DayFlowManager : MonoBehaviour
             return;
 
         gameData.SetCurrentDay(gameData.currentDay);
+        RefreshEndDayButton();
 
         if (notifyDayStarted)
             OnDayStarted?.Invoke(gameData.currentDay);
     }
 
     public bool CanEndDay()
+    {
+        return CanEndDayInternal(logWarnings: true);
+    }
+
+    private bool CanEndDayInternal(bool logWarnings)
     {
         EnsureData();
 
@@ -93,14 +108,16 @@ public class DayFlowManager : MonoBehaviour
             Chat requiredChat = chatDatabase?.chats?.Find(c => c != null && c.id == chatId);
             if (requiredChat == null)
             {
-                Debug.LogWarning($"[DayFlowManager] Required chat '{chatId}' не найден в базе. Завершение дня заблокировано.");
+                if (logWarnings)
+                    Debug.LogWarning($"[DayFlowManager] Required chat '{chatId}' не найден в базе. Завершение дня заблокировано.");
                 return false;
             }
 
             int requiredChatDay = requiredChat.dayNumber > 0 ? requiredChat.dayNumber : 1;
             if (requiredChatDay != CurrentDay)
             {
-                Debug.LogWarning($"[DayFlowManager] Required chat '{chatId}' относится к дню {requiredChatDay}, а сейчас день {CurrentDay}. Завершение дня заблокировано.");
+                if (logWarnings)
+                    Debug.LogWarning($"[DayFlowManager] Required chat '{chatId}' относится к дню {requiredChatDay}, а сейчас день {CurrentDay}. Завершение дня заблокировано.");
                 return false;
             }
 
@@ -131,6 +148,8 @@ public class DayFlowManager : MonoBehaviour
         gameData.StartNextDay();
         OnDayStarted?.Invoke(gameData.currentDay);
 
+        RefreshEndDayButton();
+
         Debug.Log($"[DayFlowManager] День {endedDay} завершен. Текущий день: {gameData.currentDay}");
         return true;
     }
@@ -139,6 +158,9 @@ public class DayFlowManager : MonoBehaviour
     {
         if (isTransitionInProgress)
             return;
+
+        if (endDayButton != null)
+            endDayButton.SetActive(false);
 
         if (!useScreenFadeTransition)
         {
@@ -158,6 +180,7 @@ public class DayFlowManager : MonoBehaviour
     public void SetRequiredChatsToEndDay(List<string> chatIds)
     {
         requiredChatsToEndDay = chatIds ?? new List<string>();
+        RefreshEndDayButton();
     }
 
     private void EnsureData()
@@ -250,6 +273,24 @@ public class DayFlowManager : MonoBehaviour
         }
 
         ApplyFadeAlpha(targetAlpha);
+    }
+    public void RefreshEndDayButton()
+    {
+        lastEndDayButtonVisibleState = false;
+        RefreshEndDayButtonRuntime();
+    }
+
+    private void RefreshEndDayButtonRuntime()
+    {
+        if (endDayButton == null)
+            return;
+
+        bool shouldShow = !isTransitionInProgress && CanEndDayInternal(logWarnings: false);
+
+        if (endDayButton.activeSelf != shouldShow || lastEndDayButtonVisibleState != shouldShow)
+            endDayButton.SetActive(shouldShow);
+
+        lastEndDayButtonVisibleState = shouldShow;
     }
 
     private void ApplyFadeAlpha(float alpha)

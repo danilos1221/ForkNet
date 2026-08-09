@@ -1,16 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 /// <summary>
 /// Отвечает ТОЛЬКО за логику сценария:
 ///   - воспроизведение последовательности сообщений из чата
-///   - ожидание ввода игрока (пробел / кнопка)
+///   - ожидание ввода игрока (кнопка/пробел приходят от View через chatManager)
 ///   - выбор вариантов ответа
 ///   - сохранение прогресса
 ///   - фоновая доставка сообщений при закрытом чате
-/// UI обновляется через ChatController.
+/// UI и сырой ввод игрока (клавиатура) обрабатываются в ChatView/ChatController.
 /// </summary>
 public class ScenarioManager : MonoBehaviour
 {
@@ -29,6 +28,10 @@ public class ScenarioManager : MonoBehaviour
     [SerializeField] private float dialogueSpeedMultiplier = 1f;
     [SerializeField] private float delayBetweenMessages    = 0.5f;
     [SerializeField] private float typingAnimationSpeed    = 0.3f;
+
+    [Header("Быстрый пропуск (пробел)")]
+    [Tooltip("Одиночное нажатие пробела работает как кнопка «Отправить». Удержание — во столько раз ускоряет автоматические задержки NPC-сообщений (печатание, паузы между репликами).")]
+    [SerializeField] private float skipSpeedMultiplier = 8f;
 
     // ──────────────────────────────────────────────
     // Приватные поля
@@ -66,6 +69,26 @@ public class ScenarioManager : MonoBehaviour
 
     private void Update()
     {
+    }
+
+    private bool IsSkipHeld() =>
+        chatManager != null && chatManager.IsSkipInputHeld();
+
+    /// <summary>
+    /// Аналог WaitForSeconds, который дополнительно ускоряется, пока игрок
+    /// удерживает пробел (см. ChatView.IsSkipHeld) — так реализуется быстрый
+    /// пропуск авто-задержек между NPC-сообщениями, как в визуальных новеллах.
+    /// ScenarioManager сам ввод не читает — только опрашивает chatManager.
+    /// </summary>
+    private IEnumerator WaitScaledSeconds(float seconds)
+    {
+        float remaining = seconds;
+        while (remaining > 0f)
+        {
+            float speed = IsSkipHeld() ? skipSpeedMultiplier : 1f;
+            remaining -= Time.deltaTime * speed;
+            yield return null;
+        }
     }
 
 
@@ -289,7 +312,7 @@ public class ScenarioManager : MonoBehaviour
 
     private IEnumerator HandleNPCMessage(ChatMessage message, string chatId, int gen)
     {
-        yield return new WaitForSeconds(delayBetweenMessages / dialogueSpeedMultiplier);
+        yield return WaitScaledSeconds(delayBetweenMessages / dialogueSpeedMultiplier);
 
         if (gen != dialogueGeneration)
             yield break;
@@ -304,7 +327,7 @@ public class ScenarioManager : MonoBehaviour
             typingAnimationCoroutine = StartCoroutine(TypingAnimation());
         }
 
-        yield return new WaitForSeconds(delayBetweenMessages / dialogueSpeedMultiplier);
+        yield return WaitScaledSeconds(delayBetweenMessages / dialogueSpeedMultiplier);
 
         StopCoroutineSafe(ref typingAnimationCoroutine);
         isShowingNPCMessage = false;

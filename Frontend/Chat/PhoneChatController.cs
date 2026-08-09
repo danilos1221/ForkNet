@@ -133,6 +133,13 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     public void ClearChoiceButtons() => chatView?.ClearChoiceButtons();
 
+    /// <summary>
+    /// Проброс состояния ввода игрока (зажат ли пробел) из View в
+    /// ScenarioManager. ScenarioManager сам ничего не знает про клавиатуру —
+    /// он только опрашивает этот метод.
+    /// </summary>
+    public bool IsSkipInputHeld() => chatView != null && chatView.IsSkipHeld();
+
     // ──────────────────────────────────────────────
     // авигация по чатам
     // ──────────────────────────────────────────────
@@ -364,7 +371,10 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
             if (msg.isSystemMarker)
             {
-                AddDayDivider(msg.dayNumber, msg.text);
+                // Формат разделителя берём из ChatView (dayDividerFormat),
+                // а не из сохранённого текста, чтобы локализация менялась
+                // сразу после правки поля в инспекторе.
+                AddDayDivider(msg.dayNumber, null);
                 continue;
             }
 
@@ -669,7 +679,6 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void OnSubmitButtonClicked()
     {
-        Debug.Log("[ChatController] нопка отправки нажата");
         scenarioManager?.OnPlayerActionButtonPressed();
     }
 }

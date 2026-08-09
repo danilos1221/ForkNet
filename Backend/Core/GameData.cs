@@ -551,8 +551,8 @@ public class GameData
         {
             messageId = dividerId,
             senderId = "system",
-            senderName = "Система",
-            text = $"--- ДЕНЬ {dayNumber} ---",
+            senderName = "System",
+            text = $"--- DAY {dayNumber} ---",
             imageId = string.Empty,
             isSystemMarker = true,
             dayNumber = dayNumber

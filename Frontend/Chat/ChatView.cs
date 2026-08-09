@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
@@ -26,7 +27,7 @@ public class ChatView : MonoBehaviour
 
     [Header("Разделитель дня")]
     [SerializeField] private GameObject dayDividerPrefab;
-    [SerializeField] private string dayDividerFormat = "--- ДЕНЬ {0} ---";
+    [SerializeField] private string dayDividerFormat = "--- DAY {0} ---";
 
     [Header("Индикатор печатания")]
     [SerializeField] private GameObject typingStatusPrefab;
@@ -75,6 +76,39 @@ public class ChatView : MonoBehaviour
         if (submitMessageButton != null)
             submitMessageButton.onClick.AddListener(() => OnSubmitPressed?.Invoke());
     }
+
+    private void Update()
+    {
+        HandleSkipInput();
+    }
+
+    // ──────────────────────────────────────────────
+    // Быстрый пропуск (пробел) — это ввод игрока,
+    // поэтому обрабатывается здесь, во View, а не в
+    // ScenarioManager. ScenarioManager лишь опрашивает
+    // IsSkipHeld() через ChatController, ничего не зная
+    // о клавиатуре.
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Пока пробел зажат, «тикаем» так же, будто игрок кликает «Отправить»
+    /// каждый кадр. Это работает и как обычный одиночный тап (кадр нажатия
+    /// тоже считается «зажатым»), и как непрерывный быстрый пропуск: любое
+    /// ожидание в ScenarioManager, завязанное на inputVersion (в том числе
+    /// ожидание реплики игрока), само разблокируется, пока клавиша держится,
+    /// без необходимости отпускать и нажимать заново.
+    /// </summary>
+    private void HandleSkipInput()
+    {
+        if (Keyboard.current == null) return;
+
+        if (Keyboard.current.spaceKey.isPressed)
+            OnSubmitPressed?.Invoke();
+    }
+
+    /// <summary>Зажат ли сейчас пробел — используется для ускорения авто-задержек NPC-сообщений.</summary>
+    public bool IsSkipHeld() =>
+        Keyboard.current != null && Keyboard.current.spaceKey.isPressed;
 
     // ──────────────────────────────────────────────
     // Заголовок чата
@@ -155,10 +189,10 @@ public class ChatView : MonoBehaviour
         string text = !string.IsNullOrWhiteSpace(rawText)
             ? rawText
             : string.Format(dayDividerFormat, Mathf.Max(1, dayNumber));
-
+        Debug.Log($"[ChatView] AddDayDivider: '{rawText}' (day {dayNumber})");
         if (dayDividerPrefab == null)
         {
-            AddMessage(text, false, "Система", chatType);
+            AddMessage(text, false, "System", chatType);
             return;
         }
 
