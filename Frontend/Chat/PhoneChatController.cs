@@ -34,6 +34,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private bool chatListInitialized;
     private bool wasOpenedBefore;
+    private int lastInitializedDay = -1;
 
     private Dictionary<string, ChatItem> chatItems = new();
 
@@ -64,6 +65,9 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         if (chatView != null)
             chatView.OnSubmitPressed += OnSubmitButtonClicked;
 
+        if (DayFlowManager.Instance != null)
+            DayFlowManager.Instance.OnDayStarted += OnDayStartedHandler;
+
         ShowChatList();
     }
 
@@ -76,6 +80,12 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     private void OnDisable()
     {
         CloseChatWindow();
+    }
+
+    private void OnDestroy()
+    {
+        if (DayFlowManager.Instance != null)
+            DayFlowManager.Instance.OnDayStarted -= OnDayStartedHandler;
     }
 
     // ──────────────────────────────────────────────
@@ -108,6 +118,9 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         UnlockGalleryItem(imageId);
     }
 
+    public void AddDayDivider(int dayNumber, string rawText = null)
+        => chatView?.AddDayDivider(dayNumber, rawText, currentChatType);
+
     public void ShowTypingIndicator()                   => chatView?.ShowTypingIndicator();
     public void HideTypingIndicator()                   => chatView?.HideTypingIndicator();
     public void UpdateTypingIndicatorText(string text)  => chatView?.UpdateTypingIndicatorText(text);
@@ -126,13 +139,22 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     public void OpenChat(string chatId)
     {
-        Debug.Log($"[ChatController] OpenChat: '{chatId}'");
-        if (selectedChatId == chatId && !wasOpenedBefore) return;
+        Chat chat = ResolveChatForSelection(chatId);
+        if (chat == null)
+        {
+            chatView?.SetChatHeader("Чат", null);
+            Debug.LogError($"[ChatController] Чат '{chatId}' не найден!");
+            return;
+        }
 
-        selectedChatId  = chatId;
+        string resolvedChatId = chat.id;
+
+        Debug.Log($"[ChatController] OpenChat: '{chatId}' -> '{resolvedChatId}'");
+        if (selectedChatId == resolvedChatId && !wasOpenedBefore) return;
+
+        selectedChatId  = resolvedChatId;
         wasOpenedBefore = false;
 
-        Chat chat = FindChatById(chatId);
         if (chat != null)
         {
             currentChatType = chat.chatType;
@@ -155,14 +177,18 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         }
 
         scenarioManager.ResetState();
-        RestoreMessageHistory(chatId);
-        chatItems.GetValueOrDefault(chatId)?.HideUnreadIndicator();
+
+        if (chat != null && gameData != null && !ThreadHasDayDivider(chat.id, gameData.currentDay))
+            gameData.EnsureDayDividerInHistory(chat.id, gameData.currentDay);
+
+        RestoreMessageHistory(resolvedChatId);
+        chatItems.GetValueOrDefault(GetUiChatKey(resolvedChatId))?.HideUnreadIndicator();
 
         if (chat != null)
-            gameData?.MarkChatAsRead(chatId, chat.messages.Count);
+            gameData?.MarkChatAsRead(resolvedChatId, chat.messages.Count);
 
         ShowChatWindowInternal();
-        scenarioManager.PlayDialogue(chatId);
+        scenarioManager.PlayDialogue(resolvedChatId);
     }
 
     public void SelectChat(string chatId) => OpenChat(chatId);
@@ -203,6 +229,8 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         Chat chat = FindChatById(chatId);
         if (chat == null) return;
 
+        string uiChatKey = GetUiChatKey(chatId);
+
         if (string.IsNullOrEmpty(message.id))
             message.id = $"runtime_{chatId}_{System.DateTime.UtcNow.Ticks}";
 
@@ -230,20 +258,21 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         else
         {
             gameData?.AddUnreadMessage(chatId);
-            chatItems.GetValueOrDefault(chatId)?.ShowUnreadIndicator();
+            chatItems.GetValueOrDefault(uiChatKey)?.ShowUnreadIndicator();
         }
 
         gameData?.AddMessageToHistory(chatId, message);
 
         string preview = !string.IsNullOrEmpty(message.imageId) ? "[фото]" : message.text;
-        chatItems.GetValueOrDefault(chatId)?.UpdatePreview(preview);
+        chatItems.GetValueOrDefault(uiChatKey)?.UpdatePreview(preview);
     }
 
     private void RestoreUnreadIndicators()
     {
         foreach (var pair in chatItems)
         {
-            int unreadCount = gameData?.GetUnreadMessageCount(pair.Key) ?? 0;
+            string activeChatId = ResolveActiveChatIdForUiKey(pair.Key);
+            int unreadCount = gameData?.GetUnreadMessageCount(activeChatId) ?? 0;
             if (unreadCount > 0)
                 pair.Value?.ShowUnreadIndicator();
             else
@@ -273,19 +302,40 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         if (chatWindowPanel != null) chatWindowPanel.SetActive(true);
     }
 
-    private void InitializeChatList()
+    private void InitializeChatList(bool forceRebuild = false)
     {
-        if (chatListInitialized) return;
+        int currentDay = GetCurrentDayNumber();
+        if (!forceRebuild && chatListInitialized && lastInitializedDay == currentDay)
+            return;
+
+        bool needClearExistingItems = forceRebuild || chatListInitialized || lastInitializedDay != currentDay;
+        if (needClearExistingItems)
+        {
+            foreach (Transform child in chatListContainer)
+                Destroy(child.gameObject);
+
+            chatItems.Clear();
+        }
 
         if (chatItemPrefabLine != null)
             Instantiate(chatItemPrefabLine, chatListContainer);
 
-        foreach (Chat chat in chatDatabase.chats)
+        foreach (Chat chat in GetChatsForCurrentDay())
         {
             Sprite avatar = Resources.Load<Sprite>(chat.avatarPath);
-            CreateChatItem(chat.id, chat.name, avatar);
+            CreateChatItem(GetUiChatKey(chat.id), chat.name, avatar);
         }
+
+        lastInitializedDay = currentDay;
         chatListInitialized = true;
+    }
+
+    private void OnDayStartedHandler(int _)
+    {
+        InitializeChatList(true);
+        RestoreUnreadIndicators();
+
+        TryAppendDayDividerForOpenedChat();
     }
 
     private void CreateChatItem(string id, string name, Sprite avatar)
@@ -306,15 +356,84 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void RestoreMessageHistory(string chatId)
     {
-        List<SavedChatMessage> history = gameData.GetChatHistory(chatId);
+        List<SavedChatMessage> history = GetHistoryForDisplay(chatId);
         foreach (var msg in history)
         {
+            if (msg == null)
+                continue;
+
+            if (msg.isSystemMarker)
+            {
+                AddDayDivider(msg.dayNumber, msg.text);
+                continue;
+            }
+
             bool isPlayer = msg.senderId == "player";
             bool isImage  = !string.IsNullOrEmpty(msg.imageId);
 
             if (isImage) AddImage(msg.imageId, isPlayer, msg.senderName);
             else         AddMessage(msg.text, isPlayer, msg.senderName);
         }
+    }
+
+    private List<SavedChatMessage> GetHistoryForDisplay(string chatId)
+    {
+        if (gameData == null || string.IsNullOrWhiteSpace(chatId))
+            return new List<SavedChatMessage>();
+
+        Chat selectedChat = FindChatById(chatId, false);
+        if (selectedChat == null)
+            return gameData.GetChatHistory(chatId);
+
+        string threadKey = GetThreadKey(selectedChat);
+        if (string.IsNullOrWhiteSpace(threadKey) || chatDatabase == null || chatDatabase.chats == null)
+            return gameData.GetChatHistory(chatId);
+
+        int currentDay = GetCurrentDayNumber();
+        var threadChats = new List<Chat>();
+
+        foreach (Chat chat in chatDatabase.chats)
+        {
+            if (chat == null)
+                continue;
+
+            if (GetThreadKey(chat) != threadKey)
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay > currentDay)
+                continue;
+
+            threadChats.Add(chat);
+        }
+
+        threadChats.Sort((left, right) =>
+        {
+            int leftDay = left != null && left.dayNumber > 0 ? left.dayNumber : 1;
+            int rightDay = right != null && right.dayNumber > 0 ? right.dayNumber : 1;
+
+            int dayCompare = leftDay.CompareTo(rightDay);
+            if (dayCompare != 0)
+                return dayCompare;
+
+            return string.CompareOrdinal(left?.id, right?.id);
+        });
+
+        var mergedHistory = new List<SavedChatMessage>();
+        for (int i = 0; i < threadChats.Count; i++)
+        {
+            Chat threadChat = threadChats[i];
+            if (threadChat == null || string.IsNullOrWhiteSpace(threadChat.id))
+                continue;
+
+            List<SavedChatMessage> part = gameData.GetChatHistory(threadChat.id);
+            if (part == null || part.Count == 0)
+                continue;
+
+            mergedHistory.AddRange(part);
+        }
+
+        return mergedHistory.Count > 0 ? mergedHistory : gameData.GetChatHistory(chatId);
     }
 
     private void DisplayMessage(ChatMessage msg)
@@ -325,10 +444,205 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         else         AddMessage(msg.text,  isPlayer, msg.senderName);
     }
 
-    private Chat FindChatById(string chatId)
+    private int GetCurrentDayNumber()
+    {
+        return gameData != null ? gameData.currentDay : 1;
+    }
+
+    private void TryAppendDayDividerForOpenedChat()
+    {
+        if (gameData == null)
+            return;
+
+        if (chatWindowPanel == null || !chatWindowPanel.activeSelf)
+            return;
+
+        if (string.IsNullOrWhiteSpace(selectedChatId))
+            return;
+
+        int currentDay = GetCurrentDayNumber();
+        bool dividerAlreadyInHistory = ThreadHasDayDivider(selectedChatId, currentDay);
+
+        if (dividerAlreadyInHistory)
+            return; // маркер этого дня уже есть где-то в треде — второй не создаём
+
+        gameData.EnsureDayDividerInHistory(selectedChatId, currentDay);
+        AddDayDivider(currentDay);
+    }
+
+    private bool HasDayDividerInHistory(string chatId, int dayNumber)
+    {
+        if (gameData == null || string.IsNullOrWhiteSpace(chatId))
+            return false;
+
+        List<SavedChatMessage> history = gameData.GetChatHistory(chatId);
+        if (history == null)
+            return false;
+
+        for (int i = 0; i < history.Count; i++)
+        {
+            SavedChatMessage message = history[i];
+            if (message == null || !message.isSystemMarker)
+                continue;
+
+            int markerDay = message.dayNumber > 0 ? message.dayNumber : 1;
+            if (markerDay == dayNumber)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Разные дни одного треда (диалога) хранятся как разные Chat.id
+    /// (см. ResolveChatForSelection/GetThreadKey), каждый со своей отдельной
+    /// историей в GameData. Разделитель дня из-за этого может быть добавлен
+    /// то в историю "вчерашнего" chat.id (пока окно было открыто и наступил
+    /// новый день), то в историю "сегодняшнего" chat.id (при следующем
+    /// открытии чата) — HasDayDividerInHistory для одного конкретного chatId
+    /// такой дубликат не увидит. Эта проверка ищет маркер дня по ВСЕМ
+    /// чатам треда, а не только по одному chatId.
+    /// </summary>
+    private bool ThreadHasDayDivider(string chatId, int dayNumber)
+    {
+        Chat selectedChat = FindChatById(chatId, false);
+        if (selectedChat == null)
+            return HasDayDividerInHistory(chatId, dayNumber);
+
+        string threadKey = GetThreadKey(selectedChat);
+        if (string.IsNullOrWhiteSpace(threadKey) || chatDatabase == null || chatDatabase.chats == null)
+            return HasDayDividerInHistory(chatId, dayNumber);
+
+        int currentDay = GetCurrentDayNumber();
+
+        foreach (Chat chat in chatDatabase.chats)
+        {
+            if (chat == null || GetThreadKey(chat) != threadKey)
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay > currentDay)
+                continue;
+
+            if (HasDayDividerInHistory(chat.id, dayNumber))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string GetThreadKey(Chat chat)
+    {
+        if (chat == null)
+            return string.Empty;
+
+        return !string.IsNullOrWhiteSpace(chat.threadId) ? chat.threadId : chat.id;
+    }
+
+    private List<Chat> GetChatsForCurrentDay()
+    {
+        var result = new List<Chat>();
+        if (chatDatabase == null || chatDatabase.chats == null)
+            return result;
+
+        int currentDay = GetCurrentDayNumber();
+        var bestByThread = new Dictionary<string, Chat>();
+        var orderedKeys = new List<string>();
+
+        foreach (Chat chat in chatDatabase.chats)
+        {
+            if (chat == null || string.IsNullOrWhiteSpace(chat.id))
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay > currentDay)
+                continue;
+
+            string threadKey = GetThreadKey(chat);
+            if (string.IsNullOrWhiteSpace(threadKey))
+                threadKey = chat.id;
+
+            if (!bestByThread.TryGetValue(threadKey, out Chat existing))
+            {
+                bestByThread[threadKey] = chat;
+                orderedKeys.Add(threadKey);
+                continue;
+            }
+
+            int existingDay = existing.dayNumber > 0 ? existing.dayNumber : 1;
+            if (chatDay > existingDay)
+                bestByThread[threadKey] = chat;
+        }
+
+        for (int i = 0; i < orderedKeys.Count; i++)
+        {
+            string key = orderedKeys[i];
+            if (bestByThread.TryGetValue(key, out Chat chat) && chat != null)
+                result.Add(chat);
+        }
+
+        return result;
+    }
+
+    private Chat ResolveChatForSelection(string selectedKey)
+    {
+        if (string.IsNullOrWhiteSpace(selectedKey) || chatDatabase == null || chatDatabase.chats == null)
+            return null;
+
+        int currentDay = GetCurrentDayNumber();
+        Chat exactById = FindChatById(selectedKey, false);
+
+        string threadKey = selectedKey;
+        if (exactById != null && !string.IsNullOrWhiteSpace(exactById.threadId))
+            threadKey = exactById.threadId;
+
+        Chat best = null;
+        foreach (Chat chat in chatDatabase.chats)
+        {
+            if (chat == null)
+                continue;
+
+            if (GetThreadKey(chat) != threadKey)
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay > currentDay)
+                continue;
+
+            if (best == null)
+            {
+                best = chat;
+                continue;
+            }
+
+            int bestDay = best.dayNumber > 0 ? best.dayNumber : 1;
+            if (chatDay > bestDay)
+                best = chat;
+        }
+
+        return best ?? exactById;
+    }
+
+    private string ResolveActiveChatIdForUiKey(string uiKey)
+    {
+        Chat resolved = ResolveChatForSelection(uiKey);
+        return resolved != null ? resolved.id : uiKey;
+    }
+
+    private string GetUiChatKey(string chatId)
+    {
+        Chat chat = FindChatById(chatId, false);
+        if (chat == null)
+            return chatId;
+
+        string threadKey = GetThreadKey(chat);
+        return string.IsNullOrWhiteSpace(threadKey) ? chat.id : threadKey;
+    }
+
+    private Chat FindChatById(string chatId, bool logWarning = true)
     {
         var chat = chatDatabase?.chats.Find(c => c.id == chatId);
-        if (chat == null)
+        if (chat == null && logWarning)
             Debug.LogWarning($"[ChatController] ат '{chatId}' не найден в базе.");
         return chat;
     }

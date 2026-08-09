@@ -10,6 +10,8 @@ public class SavedChatMessage
     public string senderName;
     public string text;
     public string imageId;
+    public bool isSystemMarker;
+    public int dayNumber = 1;
 }
 
 [System.Serializable]
@@ -32,6 +34,21 @@ public class ChatProgress
 }
 
 [System.Serializable]
+public class DayChatProgressEntry
+{
+    public string chatId;
+    public ChatProgress progress = new ChatProgress();
+}
+
+[System.Serializable]
+public class DayProgressState
+{
+    public int dayNumber = 1;
+    public bool isCompleted = false;
+    public List<DayChatProgressEntry> chatProgressEntries = new List<DayChatProgressEntry>();
+}
+
+[System.Serializable]
 public class GalleryImageData
 {
     public string itemId;
@@ -47,6 +64,9 @@ public class GalleryImageData
 [System.Serializable]
 public class GameData
 {
+    public int currentDay = 1;
+    public List<DayProgressState> dayProgressStates = new List<DayProgressState>();
+
     public List<ChatHistory> chatHistories = new();
     public Dictionary<string, Character> characters = new Dictionary<string, Character>();
     [System.Obsolete("УСТАРЕЛО! Используйте новую систему JSON диалогов через DialogueScriptDatabase")]
@@ -225,14 +245,183 @@ public class GameData
         unlockedGalleryItems.Clear();
     }
 
+    public DayProgressState GetOrCreateDayProgressState(int dayNumber)
+    {
+        dayNumber = Mathf.Max(1, dayNumber);
+
+        if (dayProgressStates == null)
+            dayProgressStates = new List<DayProgressState>();
+
+        for (int i = 0; i < dayProgressStates.Count; i++)
+        {
+            DayProgressState state = dayProgressStates[i];
+            if (state != null && state.dayNumber == dayNumber)
+                return state;
+        }
+
+        DayProgressState created = new DayProgressState
+        {
+            dayNumber = dayNumber,
+            isCompleted = false,
+            chatProgressEntries = new List<DayChatProgressEntry>()
+        };
+
+        dayProgressStates.Add(created);
+        return created;
+    }
+
+    private DayChatProgressEntry GetOrCreateDayChatProgressEntry(DayProgressState dayState, string chatId)
+    {
+        if (dayState == null || string.IsNullOrWhiteSpace(chatId))
+            return null;
+
+        if (dayState.chatProgressEntries == null)
+            dayState.chatProgressEntries = new List<DayChatProgressEntry>();
+
+        for (int i = 0; i < dayState.chatProgressEntries.Count; i++)
+        {
+            DayChatProgressEntry entry = dayState.chatProgressEntries[i];
+            if (entry != null && entry.chatId == chatId)
+            {
+                entry.progress ??= new ChatProgress();
+                return entry;
+            }
+        }
+
+        DayChatProgressEntry created = new DayChatProgressEntry
+        {
+            chatId = chatId,
+            progress = new ChatProgress()
+        };
+
+        dayState.chatProgressEntries.Add(created);
+        return created;
+    }
+
+    private ChatProgress GetOrCreateDayChatProgress(string chatId, int dayNumber)
+    {
+        DayProgressState dayState = GetOrCreateDayProgressState(dayNumber);
+        DayChatProgressEntry entry = GetOrCreateDayChatProgressEntry(dayState, chatId);
+        return entry?.progress;
+    }
+
+    private static ChatProgress CloneChatProgress(ChatProgress source)
+    {
+        if (source == null)
+            return new ChatProgress();
+
+        return new ChatProgress
+        {
+            messageIndex = source.messageIndex,
+            isCompleted = source.isCompleted,
+            unreadMessageCount = source.unreadMessageCount,
+            lastReadMessageIndex = source.lastReadMessageIndex,
+            currentStatus = source.currentStatus
+        };
+    }
+
+    public void EnsureDayStateExists(int dayNumber)
+    {
+        GetOrCreateDayProgressState(dayNumber);
+    }
+
+    public void SetCurrentDay(int dayNumber)
+    {
+        currentDay = Mathf.Max(1, dayNumber);
+        EnsureDayStateExists(currentDay);
+    }
+
+    public void MarkDayCompleted(int dayNumber)
+    {
+        DayProgressState state = GetOrCreateDayProgressState(dayNumber);
+        state.isCompleted = true;
+    }
+
+    public void StartNextDay()
+    {
+        MarkDayCompleted(currentDay);
+        SetCurrentDay(currentDay + 1);
+    }
+
+    public bool IsChatCompletedForDay(string chatId, int dayNumber)
+    {
+        if (string.IsNullOrWhiteSpace(chatId))
+            return false;
+
+        ChatProgress progress = GetOrCreateDayChatProgress(chatId, dayNumber);
+        return progress != null && progress.isCompleted;
+    }
+
+    public bool CanEndCurrentDay(IEnumerable<string> requiredChatIds)
+    {
+        if (requiredChatIds == null)
+            return true;
+
+        foreach (string chatId in requiredChatIds)
+        {
+            if (string.IsNullOrWhiteSpace(chatId))
+                continue;
+
+            if (!IsChatCompletedForDay(chatId, currentDay))
+                return false;
+        }
+
+        return true;
+    }
+
+    public void MigrateLegacyChatProgressToCurrentDay()
+    {
+        if (chatProgress == null || chatProgress.Count == 0)
+            return;
+
+        // Legacy-миграция должна выполняться только когда day-based прогресса
+        // ещё нет вообще (старые сейвы). Иначе можно случайно перенести
+        // completed-статусы из предыдущего дня в новый.
+        if (HasAnyDayProgressEntries())
+            return;
+
+        DayProgressState dayState = GetOrCreateDayProgressState(currentDay);
+        if (dayState.chatProgressEntries != null && dayState.chatProgressEntries.Count > 0)
+            return;
+
+        foreach (var kvp in chatProgress)
+        {
+            if (string.IsNullOrWhiteSpace(kvp.Key))
+                continue;
+
+            DayChatProgressEntry entry = GetOrCreateDayChatProgressEntry(dayState, kvp.Key);
+            if (entry != null)
+                entry.progress = CloneChatProgress(kvp.Value);
+        }
+    }
+
+    private bool HasAnyDayProgressEntries()
+    {
+        if (dayProgressStates == null || dayProgressStates.Count == 0)
+            return false;
+
+        for (int i = 0; i < dayProgressStates.Count; i++)
+        {
+            DayProgressState state = dayProgressStates[i];
+            if (state?.chatProgressEntries != null && state.chatProgressEntries.Count > 0)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Получить прогресс чата (индекс последнего сообщения)
     /// </summary>
     public int GetChatProgress(string chatId)
     {
-        if (chatProgress.ContainsKey(chatId))
-            return chatProgress[chatId].messageIndex;
-        return 0;
+        if (string.IsNullOrWhiteSpace(chatId))
+            return 0;
+
+        MigrateLegacyChatProgressToCurrentDay();
+
+        ChatProgress progress = GetOrCreateDayChatProgress(chatId, currentDay);
+        return progress?.messageIndex ?? 0;
     }
 
     /// <summary>
@@ -240,7 +429,17 @@ public class GameData
     /// </summary>
     public void SetChatProgress(string chatId, int messageIndex, bool isCompleted = false, string currentStatus = "")
     {
+        if (string.IsNullOrWhiteSpace(chatId))
+            return;
+
         //Debug.Log($"[GameData.SetChatProgress] Сохранение прогресса для чата '{chatId}': messageIndex={messageIndex}, isCompleted={isCompleted}");
+        MigrateLegacyChatProgressToCurrentDay();
+
+        ChatProgress dayProgress = GetOrCreateDayChatProgress(chatId, currentDay);
+        dayProgress.messageIndex = messageIndex;
+        dayProgress.isCompleted = isCompleted;
+        dayProgress.currentStatus = currentStatus;
+
         if (!chatProgress.ContainsKey(chatId))
             chatProgress[chatId] = new ChatProgress();
         
@@ -254,9 +453,11 @@ public class GameData
     /// </summary>
     public bool IsChatCompleted(string chatId)
     {
-        if (chatProgress.ContainsKey(chatId))
-            return chatProgress[chatId].isCompleted;
-        return false;
+        if (string.IsNullOrWhiteSpace(chatId))
+            return false;
+
+        MigrateLegacyChatProgressToCurrentDay();
+        return IsChatCompletedForDay(chatId, currentDay);
     }
 
     /// <summary>
@@ -264,6 +465,19 @@ public class GameData
     /// </summary>
     public void ResetChatProgress(string chatId)
     {
+        if (string.IsNullOrWhiteSpace(chatId))
+            return;
+
+        MigrateLegacyChatProgressToCurrentDay();
+
+        ChatProgress dayProgress = GetOrCreateDayChatProgress(chatId, currentDay);
+        if (dayProgress != null)
+        {
+            dayProgress.messageIndex = 0;
+            dayProgress.isCompleted = false;
+            dayProgress.currentStatus = "";
+        }
+
         if (chatProgress.ContainsKey(chatId))
             chatProgress[chatId] = new ChatProgress();
     }
@@ -309,6 +523,55 @@ public class GameData
         chatProgress[chatId].unreadMessageCount = 0;
         chatProgress[chatId].lastReadMessageIndex = totalMessages - 1;
     }
+
+    public void EnsureDayDividerInHistory(string chatId, int dayNumber)
+    {
+        if (string.IsNullOrWhiteSpace(chatId))
+            return;
+
+        dayNumber = Mathf.Max(1, dayNumber);
+        string dividerId = $"__day_divider_{dayNumber}";
+
+        ChatHistory history = chatHistories.Find(h => h.chatId == chatId);
+
+        if (history == null)
+        {
+            history = new ChatHistory
+            {
+                chatId = chatId
+            };
+
+            chatHistories.Add(history);
+        }
+
+        if (history.messages.Exists(m => m != null && m.messageId == dividerId))
+            return;
+
+        var divider = new SavedChatMessage
+        {
+            messageId = dividerId,
+            senderId = "system",
+            senderName = "Система",
+            text = $"--- ДЕНЬ {dayNumber} ---",
+            imageId = string.Empty,
+            isSystemMarker = true,
+            dayNumber = dayNumber
+        };
+
+        // Вставляем перед первым уже существующим сообщением этого дня —
+        // сообщения нового дня иногда успевают прийти в историю (например,
+        // через фоновую доставку) раньше, чем сюда доходит вызов
+        // EnsureDayDividerInHistory. Если добавлять всегда в конец списка,
+        // разделитель оказывается ПОСЛЕ таких сообщений вместо того, чтобы
+        // открывать день перед ними.
+        int insertIndex = history.messages.FindIndex(m => m != null && m.dayNumber >= dayNumber);
+
+        if (insertIndex < 0)
+            history.messages.Add(divider);
+        else
+            history.messages.Insert(insertIndex, divider);
+    }
+
     public void AddMessageToHistory(string chatId, ChatMessage message)
     {
         ChatHistory history = chatHistories.Find(h => h.chatId == chatId);
@@ -329,7 +592,9 @@ public class GameData
             senderId = message.senderId,
             senderName = message.senderName,
             text = message.text,
-            imageId = message.imageId
+            imageId = message.imageId,
+            isSystemMarker = false,
+            dayNumber = currentDay
         });
     }
     public List<SavedChatMessage> GetChatHistory(string chatId)

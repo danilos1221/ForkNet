@@ -39,6 +39,23 @@ public static class ChatParser
                 continue;
             }
 
+            if (line.StartsWith("@thread"))
+            {
+                chat.threadId = line.Substring(7).Trim();
+                continue;
+            }
+
+            if (line.StartsWith("@day"))
+            {
+                string value = line.Substring(4).Trim();
+                if (!int.TryParse(value, out chat.dayNumber))
+                {
+                    chat.dayNumber = 1;
+                    Debug.LogWarning($"Некорректный @day '{value}'. Использую dayNumber=1");
+                }
+                continue;
+            }
+
             if (line.StartsWith("@avatar"))
             {
                 chat.avatarPath = line.Substring(7).Trim();
@@ -209,6 +226,12 @@ public static class ChatParser
 
             chat.messages.Add(msg);
         }
+
+        if (string.IsNullOrWhiteSpace(chat.threadId))
+            chat.threadId = chat.id;
+
+        if (chat.dayNumber <= 0)
+            chat.dayNumber = 1;
 
         //Debug.Log($"Parsed chat: {chat.id} with {chat.messages.Count} messages.");
         return chat;

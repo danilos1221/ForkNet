@@ -13,6 +13,8 @@ public class ChatProgressEntry
 [System.Serializable]
 public class GameSave
 {
+    public int currentDay = 1;
+    public List<DayProgressState> dayProgressStates = new List<DayProgressState>();
     public Dictionary<string, int> characterAffection;
     public List<GalleryImageData> galleryItems;
     public List<string> unlockedGalleryItems;
@@ -93,6 +95,8 @@ public class SaveSystem : MonoBehaviour
         
         GameSave save = new GameSave
         {
+            currentDay = gameData.currentDay,
+            dayProgressStates = gameData.dayProgressStates ?? new List<DayProgressState>(),
             characterAffection = gameData.characterAffection ?? new Dictionary<string, int>(),
             galleryItems = gameData.GetGalleryItems() ?? new List<GalleryImageData>(),
             unlockedGalleryItems = gameData.unlockedGalleryItems ?? new List<string>(),
@@ -280,6 +284,11 @@ public class SaveSystem : MonoBehaviour
 
         gameData.CleanupGalleryItemsKeepUnlockedOnly();
 
+        gameData.currentDay = Mathf.Max(1, save.currentDay);
+        gameData.dayProgressStates =
+            save.dayProgressStates ?? new List<DayProgressState>();
+        gameData.EnsureDayStateExists(gameData.currentDay);
+
         gameData.chatHistories =
         save.chatHistories ??
         new List<ChatHistory>();
@@ -294,8 +303,11 @@ public class SaveSystem : MonoBehaviour
             }
         }
 
+        gameData.MigrateLegacyChatProgressToCurrentDay();
+
         
         Debug.Log("Сохранение загружено");
+        Debug.Log("Current Day: " + gameData.currentDay);
         Debug.Log("Character Affection Count: " + gameData.characterAffection.Count);
         Debug.Log("Gallery Items Count: " + gameData.galleryItems.Count);
         Debug.Log("Unlocked Gallery Items Count: " + gameData.unlockedGalleryItems.Count);

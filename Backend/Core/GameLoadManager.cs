@@ -78,6 +78,8 @@ public class GameLoadManager : MonoBehaviour
 
         saveSystem.ApplyLoadedSave(pendingSave);
 
+        DayFlowManager.Instance?.ReloadStateFromGameData();
+
         // В сцене может существовать несколько GalleryManager (например, случайный компонент
         // на другом окне). Обновляем все активные экземпляры, чтобы не зависеть от того,
         // какой именно вернёт FindAnyObjectByType.

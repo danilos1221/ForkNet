@@ -26,6 +26,11 @@ public class GameManager : MonoBehaviour
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
+
+        // DayFlowManager должен приходить из сцены Game, чтобы использовались
+        // inspector-настройки (requiredChatsToEndDay и параметры перехода дня).
+        // Автосоздание здесь может породить "пустой" singleton с дефолтами,
+        // который переживёт загрузку сцены и затрет сценный экземпляр.
     }
     
     private void Start()
@@ -36,5 +41,15 @@ public class GameManager : MonoBehaviour
     public void UnlockGalleryItem(string itemId)
     {
         gameData.UnlockGalleryItem(itemId);
+    }
+
+    public int GetCurrentDay()
+    {
+        return gameData != null ? gameData.currentDay : 1;
+    }
+
+    public bool TryEndCurrentDay()
+    {
+        return DayFlowManager.Instance != null && DayFlowManager.Instance.TryEndDay();
     }
 }

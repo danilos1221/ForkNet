@@ -230,6 +230,15 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
         currentOpenApp = null;
     }
 
+    public void ShowDesktopHome()
+    {
+        if (galleryManager != null)
+            galleryManager.TryHandleBack();
+
+        CloseAllWindows();
+        currentOpenApp = null;
+    }
+
     #endregion
 
     #region Navigation

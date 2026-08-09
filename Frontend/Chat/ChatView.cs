@@ -24,6 +24,10 @@ public class ChatView : MonoBehaviour
     [SerializeField] private ScrollRect scrollView;
     [SerializeField] private string imageBasePath = "Images/Gallery";
 
+    [Header("Разделитель дня")]
+    [SerializeField] private GameObject dayDividerPrefab;
+    [SerializeField] private string dayDividerFormat = "--- ДЕНЬ {0} ---";
+
     [Header("Индикатор печатания")]
     [SerializeField] private GameObject typingStatusPrefab;
 
@@ -144,6 +148,26 @@ public class ChatView : MonoBehaviour
             messageUI.SetGroupOtherImage(senderName, sprite, imageId);
 
         RegisterDisplayedMessage(imageGO);
+    }
+
+    public void AddDayDivider(int dayNumber, string rawText, ChatType chatType)
+    {
+        string text = !string.IsNullOrWhiteSpace(rawText)
+            ? rawText
+            : string.Format(dayDividerFormat, Mathf.Max(1, dayNumber));
+
+        if (dayDividerPrefab == null)
+        {
+            AddMessage(text, false, "Система", chatType);
+            return;
+        }
+
+        GameObject dividerGO = Instantiate(dayDividerPrefab, messageContainer);
+        TextMeshProUGUI dividerText = dividerGO.GetComponentInChildren<TextMeshProUGUI>();
+        if (dividerText != null)
+            dividerText.text = text;
+
+        RegisterDisplayedMessage(dividerGO);
     }
 
     public void ClearMessages()

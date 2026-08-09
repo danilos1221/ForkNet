@@ -31,15 +31,30 @@ public class GameEventManager : MonoBehaviour
     {
         gameData = GameManager.Instance.GameData ?? new GameData();
 
+        if (DayFlowManager.Instance != null)
+        {
+            DayFlowManager.Instance.OnDayStarted += NotifyDayStarted;
+            DayFlowManager.Instance.OnDayEnded += NotifyDayEnded;
+        }
+
         foreach (GameEvent evt in events)
         {
             if (evt.triggerType == GameEventTriggerType.OnGameStart)
                 StartCoroutine(RunDelayed(evt));
         }
+
+        // Если менеджер дня уже стартовал раньше нас, синхронизируем day-start вручную.
+        NotifyDayStarted(DayFlowManager.Instance != null ? DayFlowManager.Instance.CurrentDay : gameData.currentDay);
     }
 
     private void OnDestroy()
     {
+        if (DayFlowManager.Instance != null)
+        {
+            DayFlowManager.Instance.OnDayStarted -= NotifyDayStarted;
+            DayFlowManager.Instance.OnDayEnded -= NotifyDayEnded;
+        }
+
         if (Instance == this)
             Instance = null;
     }
@@ -71,6 +86,36 @@ public class GameEventManager : MonoBehaviour
         {
             if (evt.triggerType == GameEventTriggerType.OnChatCompleted && evt.requiredChatId == chatId)
                 StartCoroutine(RunDelayed(evt));
+        }
+    }
+
+    public void NotifyDayStarted(int dayNumber)
+    {
+        for (int i = 0; i < events.Count; i++)
+        {
+            GameEvent evt = events[i];
+            if (evt.triggerType != GameEventTriggerType.OnDayStart)
+                continue;
+
+            if (evt.requiredDay > 0 && evt.requiredDay != dayNumber)
+                continue;
+
+            StartCoroutine(RunDelayed(evt));
+        }
+    }
+
+    public void NotifyDayEnded(int dayNumber)
+    {
+        for (int i = 0; i < events.Count; i++)
+        {
+            GameEvent evt = events[i];
+            if (evt.triggerType != GameEventTriggerType.OnDayEnd)
+                continue;
+
+            if (evt.requiredDay > 0 && evt.requiredDay != dayNumber)
+                continue;
+
+            StartCoroutine(RunDelayed(evt));
         }
     }
 

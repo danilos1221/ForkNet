@@ -36,6 +36,8 @@ public enum ChatType
 public class Chat
 {
     public string id;
+    public string threadId;
+    public int dayNumber = 1;
     public string name;
     public string status;
     public string avatarPath;  // Путь к ресурсу: "Images/Avatars/alice"

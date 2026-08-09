@@ -14,6 +14,12 @@ public enum GameEventTriggerType
 
     /// <summary>Срабатывает, когда диалог чата requiredChatId помечен завершённым.</summary>
     OnChatCompleted,
+
+    /// <summary>Срабатывает при старте любого дня (или конкретного requiredDay).</summary>
+    OnDayStart,
+
+    /// <summary>Срабатывает при завершении любого дня (или конкретного requiredDay).</summary>
+    OnDayEnd,
 }
 
 /// <summary>Что делает событие при срабатывании.</summary>
@@ -47,6 +53,9 @@ public class GameEvent
 
     [Tooltip("Используется для триггера OnChatCompleted")]
     public string requiredChatId;
+
+    [Tooltip("Опционально: использовать конкретный день для OnDayStart/OnDayEnd. 0 = любой день")]
+    public int requiredDay = 0;
 
     [Tooltip("Если true — событие срабатывает только один раз за игру (сохраняется в GameData)")]
     public bool oneTime = true;
