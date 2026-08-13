@@ -33,7 +33,6 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     private ChatType currentChatType;
 
     private bool chatListInitialized;
-    private bool wasOpenedBefore;
     private int lastInitializedDay = -1;
 
     private Dictionary<string, ChatItem> chatItems = new();
@@ -73,7 +72,6 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void OnEnable()
     {
-        wasOpenedBefore = true;
         ShowChatList();
     }
 
@@ -157,10 +155,12 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         string resolvedChatId = chat.id;
 
         Debug.Log($"[ChatController] OpenChat: '{chatId}' -> '{resolvedChatId}'");
-        if (selectedChatId == resolvedChatId && !wasOpenedBefore) return;
+        if (selectedChatId == resolvedChatId &&
+            chatWindowPanel != null &&
+            chatWindowPanel.activeSelf)
+            return;
 
         selectedChatId  = resolvedChatId;
-        wasOpenedBefore = false;
 
         if (chat != null)
         {

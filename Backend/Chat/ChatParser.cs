@@ -207,14 +207,14 @@ public static class ChatParser
 
             switch (speaker)
             {
-                case "Настя":
+                case "Nastya":
                     msg.senderId = "nastya";
-                    msg.senderName = "Настя";
+                    msg.senderName = "Nastya";
                     break;
 
-                case "Герой":
+                case "Protagonist":
                     msg.senderId = "player";
-                    msg.senderName = "Ты";
+                    msg.senderName = "You";
                     break;
 
                 default:

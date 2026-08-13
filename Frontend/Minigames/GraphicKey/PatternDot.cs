@@ -17,7 +17,7 @@ public class PatternDot : MonoBehaviour, IPointerEnterHandler, IPointerDownHandl
 
     [Header("Colors (неоновые, будут \"гореть\" под Bloom)")]
     public Color normalColor = new Color(0.85f, 0.9f, 1f);
-    public Color startColor = new Color(0.2f, 1f, 0.5f);       // неоновый зелёный
+    public Color startColor = new Color(0f, 0f, 1f);       // неоновый синий
     public Color endColor = new Color(1f, 0.85f, 0.2f);        // неоновый жёлтый
     public Color blockerColor = new Color(0.85f, 0.1f, 0.9f);  // неоновый пурпурный
     public Color selectedColor = new Color(0.2f, 0.9f, 1f);    // неоновый циан

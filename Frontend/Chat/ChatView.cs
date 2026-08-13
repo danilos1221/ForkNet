@@ -45,7 +45,7 @@ public class ChatView : MonoBehaviour
     [Header("Настройки сообщений")]
     [SerializeField] private string messageAppearSoundName = "message_appear";
     [SerializeField] private float messageSoundVolume = 0.7f;
-    [SerializeField] private int maxMessageHistorySize = 100;
+    [SerializeField] private int maxMessageHistorySize = 10000;
 
     [Header("Анимация кнопки")]
     [SerializeField] private float pulseSpeed = 2f;

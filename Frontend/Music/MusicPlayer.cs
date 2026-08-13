@@ -21,6 +21,9 @@ public class MusicPlayer : MonoBehaviour
     
     private List<MusicTrackItem> trackItems = new List<MusicTrackItem>();
 
+    [SerializeField] private Sprite playSprite;
+    [SerializeField] private Sprite pauseSprite;
+
     // ──────────────────────────────────────────────
     // Unity lifecycle
     // ──────────────────────────────────────────────
@@ -192,7 +195,15 @@ public class MusicPlayer : MonoBehaviour
     
     private void UpdatePlayButtonUI(bool isPlaying)
     {
-        // Здесь можно сменить спрайт кнопки в зависимости от состояния
+        Image buttonImage = playButton.GetComponent<Image>();
+
+        if (buttonImage == null)
+        {
+            Debug.LogWarning("На playButton нет компонента Image!");
+            return;
+        }
+
+        buttonImage.sprite = isPlaying ? pauseSprite : playSprite;
     }
     
     private void OnProgressChanged(float value)

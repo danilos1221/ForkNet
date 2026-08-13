@@ -73,7 +73,18 @@ public class PhoneNavigationManager : MonoBehaviour
     /// </summary>
     public void OpenScreen(GameObject screen, bool addToHistory)
     {
-        if (screen == null || screen == currentScreen) return;
+        if (screen == null) return;
+
+        // Если запрашивают тот же экран повторно, но он оказался скрыт
+        // (например, после внутренней обработки "назад"), нужно
+        // переактивировать его, иначе кнопка "не работает" до
+        // переключения на другой экран.
+        if (screen == currentScreen)
+        {
+            if (!screen.activeInHierarchy)
+                SetActiveScreenInternal(screen, clearHistory: false);
+            return;
+        }
 
         if (addToHistory && currentScreen != null)
             history.Push(currentScreen);
@@ -86,13 +97,25 @@ public class PhoneNavigationManager : MonoBehaviour
     {
         Debug.Log($"[Nav] GoBack called. currentScreen = {currentScreen?.name}");
 
-        if (currentScreen != null &&
-            currentScreen.TryGetComponent<INavigableScreen>(out var navigable))
+        INavigableScreen navigable = ResolveNavigableForCurrentScreen();
+        if (navigable != null)
         {
-            Debug.Log($"[Nav] Found INavigableScreen on {currentScreen.name}, calling TryHandleBack()");
+            Debug.Log($"[Nav] Found INavigableScreen for {currentScreen?.name}, calling TryHandleBack()");
             if (navigable.TryHandleBack())
             {
                 Debug.Log("[Nav] TryHandleBack() returned true, staying on screen.");
+
+                // Некоторые экраны могут вернуть true, но при этом скрыть
+                // собственный root-объект. Тогда currentScreen остаётся
+                // ссылаться на скрытый экран и повторное OpenScreen(screen)
+                // не срабатывает. Если экран скрыт — уходим на previous/home.
+                if (currentScreen != null && !currentScreen.activeInHierarchy)
+                {
+                    GameObject fallback = history.Count > 0 ? history.Pop() : homeScreen;
+                    Debug.Log($"[Nav] Current screen became inactive after TryHandleBack, fallback to: {fallback?.name}");
+                    SetActiveScreenInternal(fallback, clearHistory: false);
+                }
+
                 return;
             }
             Debug.Log("[Nav] TryHandleBack() returned false, going to previous screen.");
@@ -146,5 +169,26 @@ public class PhoneNavigationManager : MonoBehaviour
             gameMenuScreen.SetActive(screen == gameMenuScreen);
 
         currentScreen = screen;
+    }
+
+    private INavigableScreen ResolveNavigableForCurrentScreen()
+    {
+        if (currentScreen == null)
+            return null;
+
+        // 1) Обычный путь: компонент висит на самом root-объекте экрана.
+        INavigableScreen navigable = currentScreen.GetComponent<INavigableScreen>();
+        if (navigable != null)
+            return navigable;
+
+        // 2) Частый кейс в сцене: currentScreen — дочерний контейнер,
+        // а INavigableScreen висит на родителе.
+        navigable = currentScreen.GetComponentInParent<INavigableScreen>();
+        if (navigable != null)
+            return navigable;
+
+        // 3) Фолбэк: компонент висит глубже в дочерних объектах экрана.
+        navigable = currentScreen.GetComponentInChildren<INavigableScreen>(true);
+        return navigable;
     }
 }

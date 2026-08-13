@@ -21,12 +21,15 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     [SerializeField] private GameObject savePanel;   // панель со слотами сохранений
     [SerializeField] private GameObject settingsPanel;
 
+
     [Header("Кнопки главного меню")]
     [Tooltip("Кнопка, открывающая панель со слотами сохранений")]
     [SerializeField] private Button saveButton;
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button exitButton;
-
+    [SerializeField] private Button patreonButton; // кнопка Patreon (необязательно, может быть null)
+    [SerializeField] private string patreonUrl;
+    
     [Header("Кнопки закрытия панелей верхнего уровня")]
     [SerializeField] private Button closeSaveButton;
     [SerializeField] private Button closeSettingsButton;
@@ -93,6 +96,8 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
         if (deleteSlotActionButton != null) deleteSlotActionButton.onClick.AddListener(DeleteSelectedSlot);
         if (closeSlotActionButton != null) closeSlotActionButton.onClick.AddListener(ClosePanel);
 
+        if (patreonButton != null) patreonButton.onClick.AddListener(OpenPatreonLink);
+
         changeDesktopButton.onClick.AddListener(() => OpenPanel(changeDesktopPanel));
         changeNamesButton.onClick.AddListener(() => OpenPanel(changeNamesPanel));
         //closeChangeDesktopButton.onClick.AddListener(ClosePanel);
@@ -105,6 +110,11 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
             // Устанавливаем начальный спрайт
             UpdateToggleSprite(CheatsEnabled);
         }
+    }
+    private void OpenPatreonLink()
+    {
+        if (!string.IsNullOrEmpty(patreonUrl))
+            Application.OpenURL(patreonUrl);
     }
 
     /// <summary>

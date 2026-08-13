@@ -923,7 +923,7 @@ public class PathPuzzleController : MonoBehaviour
         isRejecting = false;
 
         ClearAll();
-        SetStatus("Начните с зелёной точки");
+        SetStatus("Start with the green dot");
     }
 
     void StopErrorFlash()

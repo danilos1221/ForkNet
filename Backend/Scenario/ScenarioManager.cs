@@ -332,7 +332,7 @@ public class ScenarioManager : MonoBehaviour
         StopCoroutineSafe(ref typingAnimationCoroutine);
         isShowingNPCMessage = false;
         chatManager?.HideTypingIndicator();
-        chatManager?.SetStatusText("В сети");
+        chatManager?.SetStatusText("Online");
         if (gen != dialogueGeneration)
             yield break;
 
@@ -707,7 +707,7 @@ public class ScenarioManager : MonoBehaviour
         int dots = 0;
         while (isShowingNPCMessage)
         {
-            string text = "пишет" + new string('.', dots + 1);
+            string text = "typing" + new string('.', dots + 1);
             chatManager?.SetStatusText(text);
             chatManager?.UpdateTypingIndicatorText(text);
 

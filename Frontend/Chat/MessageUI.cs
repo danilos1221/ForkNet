@@ -127,7 +127,7 @@ public class MessageUI : MonoBehaviour
     {
         HideNameText();
         messageText.text = message;
-        messageText.alignment = TextAlignmentOptions.BottomRight;
+        messageText.alignment = TextAlignmentOptions.BottomLeft;
         timeText.alignment = TextAlignmentOptions.BottomLeft;
         
         AlignToRight();
