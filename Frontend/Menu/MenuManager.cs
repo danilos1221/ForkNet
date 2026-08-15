@@ -18,6 +18,7 @@ using TMPro;
 public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
 {
     [Header("Панели верхнего уровня")]
+    [SerializeField] private GameObject menuButtonsPanel;
     [SerializeField] private GameObject savePanel;   // панель со слотами сохранений
     [SerializeField] private GameObject settingsPanel;
 
@@ -46,6 +47,8 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     [Header("Под-панели настроек (открываются поверх settingsPanel)")]
     [SerializeField] private GameObject changeDesktopPanel;
     [SerializeField] private GameObject changeNamesPanel;
+    [SerializeField] private GameObject resolutionsPanel;
+    [SerializeField] private GameObject cheatPanel;
 
     [Header("Кнопки внутри панели настроек")]
     [SerializeField] private Button changeDesktopButton;
@@ -125,6 +128,11 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     {
         if (panel == null || panel == currentPanel) return;
 
+        HideAdditionalSiblingPanels();
+
+        if (menuButtonsPanel != null)
+            menuButtonsPanel.SetActive(false);
+
         if (currentPanel != null)
         {
             currentPanel.SetActive(false);
@@ -156,13 +164,24 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     /// </summary>
     public void ClosePanel()
     {
+        HideAdditionalSiblingPanels();
+
         if (currentPanel != null)
             currentPanel.SetActive(false);
 
         currentPanel = panelHistory.Count > 0 ? panelHistory.Pop() : null;
 
         if (currentPanel != null)
+        {
+            if (menuButtonsPanel != null)
+                menuButtonsPanel.SetActive(false);
             currentPanel.SetActive(true);
+        }
+        else
+        {
+            if (menuButtonsPanel != null)
+                menuButtonsPanel.SetActive(true);
+        }
     }
 
     /// <summary>
@@ -219,14 +238,27 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     /// <summary>Жёстко закрыть все панели и сбросить историю (используется при открытии/закрытии меню).</summary>
     public void CloseAllPanels()
     {
+        if (menuButtonsPanel != null) menuButtonsPanel.SetActive(true);
         if (savePanel != null) savePanel.SetActive(false);
         if (settingsPanel != null) settingsPanel.SetActive(false);
         if (changeDesktopPanel != null) changeDesktopPanel.SetActive(false);
         if (changeNamesPanel != null) changeNamesPanel.SetActive(false);
+        HideAdditionalSiblingPanels();
         if (slotActionPanel != null) slotActionPanel.SetActive(false);
 
         panelHistory.Clear();
         currentPanel = null;
+    }
+
+    public void PrepareForOpen()
+    {
+        CloseAllPanels();
+    }
+
+    private void HideAdditionalSiblingPanels()
+    {
+        if (resolutionsPanel != null) resolutionsPanel.SetActive(false);
+        if (cheatPanel != null) cheatPanel.SetActive(false);
     }
 
     private void ResetToRoot() => CloseAllPanels();

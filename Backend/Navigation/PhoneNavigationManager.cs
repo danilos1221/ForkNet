@@ -140,6 +140,15 @@ public class PhoneNavigationManager : MonoBehaviour
     public void OpenGameMenu()
     {
         OpenScreen(gameMenuScreen);
+
+        if (gameMenuScreen != null)
+        {
+            MenuManager menuManager = gameMenuScreen.GetComponent<MenuManager>()
+                                   ?? gameMenuScreen.GetComponentInParent<MenuManager>()
+                                   ?? gameMenuScreen.GetComponentInChildren<MenuManager>(true);
+            if (menuManager != null)
+                menuManager.PrepareForOpen();
+        }
     }
 
     public GameObject CurrentScreen => currentScreen;

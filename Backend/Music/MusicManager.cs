@@ -10,6 +10,7 @@ public class MusicManager : MonoBehaviour
     public static MusicManager Instance { get; private set; }
 
     [SerializeField] private AudioSource audioSource;
+    [SerializeField, Range(0f, 1f)] private float masterMusicVolume = 1f;
 
     private List<AudioClip> playlist = new List<AudioClip>();
     private int currentTrackIndex = 0;
@@ -53,6 +54,8 @@ public class MusicManager : MonoBehaviour
         {
             audioSource = gameObject.AddComponent<AudioSource>();
         }
+
+        audioSource.volume = Mathf.Clamp01(masterMusicVolume);
 
         LoadPlaylist();
     }
@@ -230,6 +233,18 @@ public class MusicManager : MonoBehaviour
     public AudioClip GetCurrentClip()
     {
         return audioSource.clip;
+    }
+
+    public void SetMusicVolume(float volume)
+    {
+        masterMusicVolume = Mathf.Clamp01(volume);
+        if (audioSource != null)
+            audioSource.volume = masterMusicVolume;
+    }
+
+    public float GetMusicVolume()
+    {
+        return masterMusicVolume;
     }
 
 

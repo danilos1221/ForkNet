@@ -74,6 +74,16 @@ public class ScenarioManager : MonoBehaviour
     private bool IsSkipHeld() =>
         chatManager != null && chatManager.IsSkipInputHeld();
 
+    public void SetSkipSpeedMultiplier(float value)
+    {
+        skipSpeedMultiplier = Mathf.Clamp(value, 1f, 10f);
+    }
+
+    public float GetSkipSpeedMultiplier()
+    {
+        return skipSpeedMultiplier;
+    }
+
     /// <summary>
     /// Аналог WaitForSeconds, который дополнительно ускоряется, пока игрок
     /// удерживает пробел (см. ChatView.IsSkipHeld) — так реализуется быстрый
