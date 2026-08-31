@@ -105,7 +105,7 @@ public class DayFlowManager : MonoBehaviour
             if (string.IsNullOrWhiteSpace(chatId))
                 continue;
 
-            Chat requiredChat = chatDatabase?.chats?.Find(c => c != null && c.id == chatId);
+            Chat requiredChat = ResolveRequiredChatForCurrentDay(chatDatabase, chatId);
             if (requiredChat == null)
             {
                 if (logWarnings)
@@ -126,6 +126,44 @@ public class DayFlowManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    private Chat ResolveRequiredChatForCurrentDay(ChatDatabase chatDatabase, string chatId)
+    {
+        if (chatDatabase == null || chatDatabase.chats == null || string.IsNullOrWhiteSpace(chatId))
+            return null;
+
+        Chat exactForCurrentDay = null;
+        Chat bestFallback = null;
+
+        for (int i = 0; i < chatDatabase.chats.Count; i++)
+        {
+            Chat chat = chatDatabase.chats[i];
+            if (chat == null || chat.id != chatId)
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay == CurrentDay)
+            {
+                exactForCurrentDay = chat;
+                break;
+            }
+
+            if (chatDay > CurrentDay)
+                continue;
+
+            if (bestFallback == null)
+            {
+                bestFallback = chat;
+                continue;
+            }
+
+            int bestDay = bestFallback.dayNumber > 0 ? bestFallback.dayNumber : 1;
+            if (chatDay > bestDay)
+                bestFallback = chat;
+        }
+
+        return exactForCurrentDay ?? bestFallback;
     }
 
     public bool TryEndDay()

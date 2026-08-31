@@ -22,6 +22,7 @@ public class GameSave
     public string saveDate;  // Дата сохранения
     public List<ChatHistory> chatHistories = new List<ChatHistory>();
     public List<ChatCustomNameEntry> chatCustomNames = new List<ChatCustomNameEntry>();
+    public List<DialogueScoreEntry> dialogueScores = new List<DialogueScoreEntry>();
 }
 
 [System.Serializable]
@@ -105,6 +106,7 @@ public class SaveSystem : MonoBehaviour
             // НОВОЕ
             chatHistories = gameData.chatHistories ?? new List<ChatHistory>(),
             chatCustomNames = gameData.chatCustomNames ?? new List<ChatCustomNameEntry>(),
+            dialogueScores = gameData.dialogueScores ?? new List<DialogueScoreEntry>(),
 
             saveDate = System.DateTime.Now.ToString("dd.MM.yyyy HH:mm")
         };
@@ -298,6 +300,10 @@ public class SaveSystem : MonoBehaviour
         gameData.chatCustomNames =
             save.chatCustomNames ??
             new List<ChatCustomNameEntry>();
+
+        gameData.dialogueScores =
+            save.dialogueScores ??
+            new List<DialogueScoreEntry>();
 
         gameData.chatProgress = new Dictionary<string, ChatProgress>();
 

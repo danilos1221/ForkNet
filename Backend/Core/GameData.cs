@@ -69,6 +69,13 @@ public class ChatCustomNameEntry
 }
 
 [System.Serializable]
+public class DialogueScoreEntry
+{
+    public string key;
+    public int value;
+}
+
+[System.Serializable]
 public class GameData
 {
     public int currentDay = 1;
@@ -80,6 +87,7 @@ public class GameData
     public Dictionary<string, Dialogue> dialogues = new Dictionary<string, Dialogue>();
     public Dictionary<string, int> characterAffection = new Dictionary<string, int>();
     public List<ChatCustomNameEntry> chatCustomNames = new List<ChatCustomNameEntry>();
+    public List<DialogueScoreEntry> dialogueScores = new List<DialogueScoreEntry>();
     public List<GalleryImageData> galleryItems = new List<GalleryImageData>();
     //[System.Obsolete("Legacy поле. Используйте galleryItems с isUnlocked")]
     public List<string> unlockedGalleryItems = new List<string>();
@@ -673,6 +681,58 @@ public class GameData
 
         if (!firedEvents.Contains(eventId))
             firedEvents.Add(eventId);
+    }
+
+    public int GetDialogueScore(string scoreKey)
+    {
+        scoreKey = NormalizeChatKey(scoreKey);
+        if (string.IsNullOrWhiteSpace(scoreKey))
+            return 0;
+
+        dialogueScores ??= new List<DialogueScoreEntry>();
+
+        for (int i = 0; i < dialogueScores.Count; i++)
+        {
+            DialogueScoreEntry entry = dialogueScores[i];
+            if (entry == null || entry.key != scoreKey)
+                continue;
+
+            return entry.value;
+        }
+
+        return 0;
+    }
+
+    public void SetDialogueScore(string scoreKey, int value)
+    {
+        scoreKey = NormalizeChatKey(scoreKey);
+        if (string.IsNullOrWhiteSpace(scoreKey))
+            return;
+
+        dialogueScores ??= new List<DialogueScoreEntry>();
+
+        for (int i = 0; i < dialogueScores.Count; i++)
+        {
+            DialogueScoreEntry entry = dialogueScores[i];
+            if (entry == null || entry.key != scoreKey)
+                continue;
+
+            entry.value = value;
+            return;
+        }
+
+        dialogueScores.Add(new DialogueScoreEntry
+        {
+            key = scoreKey,
+            value = value
+        });
+    }
+
+    public int AddDialogueScore(string scoreKey, int delta)
+    {
+        int nextValue = GetDialogueScore(scoreKey) + delta;
+        SetDialogueScore(scoreKey, nextValue);
+        return nextValue;
     }
 
     public string GetCustomChatName(string chatKey)

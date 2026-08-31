@@ -7,6 +7,8 @@ public class ChatChoice
 {
     public string text;
     public string @goto;  // Куда перейти при выборе этого варианта (используется @ для экранирования зарезервированного слова)
+    public string scoreKey;
+    public int scoreDelta;
 }
 
 [System.Serializable]
@@ -24,6 +26,16 @@ public class ChatMessage
     public string type;  // Тип сообщения ("choice" для выборов)
     public List<ChatChoice> choices;  // Варианты выбора (если type == "choice")
     public string @goto;  // Переход на сообщение с этим id (используется @ для экранирования зарезервированного слова)
+
+    // Условный переход по очкам (type == "if_score")
+    public string scoreKey;
+    public string scoreOperator;
+    public int scoreThreshold;
+    public string gotoIfTrue;
+    public string gotoIfFalse;
+
+    // Команды управления очками (type == "set_score" / "add_score")
+    public int scoreValue;
 }
 
 public enum ChatType

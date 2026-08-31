@@ -129,8 +129,8 @@ public class ScenarioManager : MonoBehaviour
     public void PlayDialogue(string chatId)
     {
         //Debug.Log($"PlayDialogue chat={chatId} gen={dialogueGeneration}");
-        
-        currentChat = chatDatabase.chats.Find(c => c.id == chatId);
+
+        currentChat = ResolveChatForPlayback(chatId);
         
         if (currentChat == null)
         {
@@ -148,6 +148,46 @@ public class ScenarioManager : MonoBehaviour
 
         int gen = dialogueGeneration;
         playSequenceCoroutine = StartCoroutine(PlayChatSequence(gen));
+    }
+
+    private Chat ResolveChatForPlayback(string chatId)
+    {
+        if (chatDatabase == null || chatDatabase.chats == null || string.IsNullOrWhiteSpace(chatId))
+            return null;
+
+        int currentDay = gameData != null ? Mathf.Max(1, gameData.currentDay) : 1;
+
+        Chat exactForDay = null;
+        Chat bestFallback = null;
+
+        for (int i = 0; i < chatDatabase.chats.Count; i++)
+        {
+            Chat chat = chatDatabase.chats[i];
+            if (chat == null || chat.id != chatId)
+                continue;
+
+            int chatDay = chat.dayNumber > 0 ? chat.dayNumber : 1;
+            if (chatDay == currentDay)
+            {
+                exactForDay = chat;
+                break;
+            }
+
+            if (chatDay > currentDay)
+                continue;
+
+            if (bestFallback == null)
+            {
+                bestFallback = chat;
+                continue;
+            }
+
+            int bestDay = bestFallback.dayNumber > 0 ? bestFallback.dayNumber : 1;
+            if (chatDay > bestDay)
+                bestFallback = chat;
+        }
+
+        return exactForDay ?? bestFallback;
     }
 
     // ──────────────────────────────────────────────
@@ -181,6 +221,20 @@ public class ScenarioManager : MonoBehaviour
                 {
                     yield return StartCoroutine(HandleChoiceMessage(current));
                     current = ResolveJumpTarget(FindMessageById(currentMessageId));
+                }
+                else if (current.type == "if_score")
+                {
+                    current = ResolveIfScoreBranch(current);
+                }
+                else if (current.type == "set_score")
+                {
+                    ApplySetScore(current);
+                    current = GetNextMessage(current);
+                }
+                else if (current.type == "add_score")
+                {
+                    ApplyAddScore(current);
+                    current = GetNextMessage(current);
                 }
                 else if (IsGotoOnlyMessage(current))
                 {
@@ -266,8 +320,55 @@ public class ScenarioManager : MonoBehaviour
             Debug.LogWarning("[ScenarioManager] Выбор вышел за пределы диапазона.");
         }*/
         ChatChoice selected = choiceMessage.choices[selectedIndex];
+
+        if (gameData != null &&
+            !string.IsNullOrWhiteSpace(selected.scoreKey) &&
+            selected.scoreDelta != 0)
+        {
+            int nextScore = gameData.AddDialogueScore(selected.scoreKey, selected.scoreDelta);
+            Debug.Log($"[ScenarioManager] score '{selected.scoreKey}' changed by {selected.scoreDelta}, now {nextScore}");
+        }
+
         currentMessageId = selected.@goto;
         wasChoiceSelected = true;
+    }
+
+    private ChatMessage ResolveIfScoreBranch(ChatMessage conditionMessage)
+    {
+        if (conditionMessage == null)
+            return null;
+
+        int currentScore = 0;
+        if (gameData != null && !string.IsNullOrWhiteSpace(conditionMessage.scoreKey))
+            currentScore = gameData.GetDialogueScore(conditionMessage.scoreKey);
+
+        bool conditionPassed = EvaluateScoreCondition(
+            currentScore,
+            conditionMessage.scoreOperator,
+            conditionMessage.scoreThreshold);
+
+        string nextTarget = conditionPassed
+            ? conditionMessage.gotoIfTrue
+            : conditionMessage.gotoIfFalse;
+
+        if (string.IsNullOrWhiteSpace(nextTarget))
+            return ResolveLinearNext(currentChat.messages.IndexOf(conditionMessage) + 1);
+
+        return JumpTo(nextTarget);
+    }
+
+    private static bool EvaluateScoreCondition(int scoreValue, string op, int threshold)
+    {
+        return op switch
+        {
+            ">" => scoreValue > threshold,
+            ">=" => scoreValue >= threshold,
+            "<" => scoreValue < threshold,
+            "<=" => scoreValue <= threshold,
+            "==" => scoreValue == threshold,
+            "!=" => scoreValue != threshold,
+            _ => false
+        };
     }
 
     private IEnumerator HandleRegularMessage(ChatMessage message, string chatId, int gen)
@@ -401,6 +502,26 @@ public class ScenarioManager : MonoBehaviour
         {
             if (current.senderId == "player" || current.type == "choice")
                 break; // дальше нужен реальный ввод игрока — остановимся здесь
+
+            if (current.type == "if_score")
+            {
+                current = ResolveIfScoreBranch(current);
+                continue;
+            }
+
+            if (current.type == "set_score")
+            {
+                ApplySetScore(current);
+                current = ResolveFromIndex(chat, chat.messages.IndexOf(current) + 1);
+                continue;
+            }
+
+            if (current.type == "add_score")
+            {
+                ApplyAddScore(current);
+                current = ResolveFromIndex(chat, chat.messages.IndexOf(current) + 1);
+                continue;
+            }
 
             if (IsGotoOnlyMessage(current))
             {
@@ -697,6 +818,24 @@ public class ScenarioManager : MonoBehaviour
         string.IsNullOrEmpty(msg.senderId) &&
         string.IsNullOrEmpty(msg.text) &&
         string.IsNullOrEmpty(msg.@goto);
+
+    private void ApplySetScore(ChatMessage message)
+    {
+        if (gameData == null || message == null || string.IsNullOrWhiteSpace(message.scoreKey))
+            return;
+
+        gameData.SetDialogueScore(message.scoreKey, message.scoreValue);
+        Debug.Log($"[ScenarioManager] score '{message.scoreKey}' set to {message.scoreValue}");
+    }
+
+    private void ApplyAddScore(ChatMessage message)
+    {
+        if (gameData == null || message == null || string.IsNullOrWhiteSpace(message.scoreKey))
+            return;
+
+        int result = gameData.AddDialogueScore(message.scoreKey, message.scoreValue);
+        Debug.Log($"[ScenarioManager] score '{message.scoreKey}' changed by {message.scoreValue}, now {result}");
+    }
 
     private void StopCoroutineSafe(ref Coroutine coroutine)
     {
