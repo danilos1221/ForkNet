@@ -62,6 +62,13 @@ public class GalleryImageData
 }
 
 [System.Serializable]
+public class ChatCustomNameEntry
+{
+    public string chatKey;
+    public string customName;
+}
+
+[System.Serializable]
 public class GameData
 {
     public int currentDay = 1;
@@ -72,6 +79,7 @@ public class GameData
     [System.Obsolete("УСТАРЕЛО! Используйте новую систему JSON диалогов через DialogueScriptDatabase")]
     public Dictionary<string, Dialogue> dialogues = new Dictionary<string, Dialogue>();
     public Dictionary<string, int> characterAffection = new Dictionary<string, int>();
+    public List<ChatCustomNameEntry> chatCustomNames = new List<ChatCustomNameEntry>();
     public List<GalleryImageData> galleryItems = new List<GalleryImageData>();
     //[System.Obsolete("Legacy поле. Используйте galleryItems с isUnlocked")]
     public List<string> unlockedGalleryItems = new List<string>();
@@ -665,6 +673,91 @@ public class GameData
 
         if (!firedEvents.Contains(eventId))
             firedEvents.Add(eventId);
+    }
+
+    public string GetCustomChatName(string chatKey)
+    {
+        chatKey = NormalizeChatKey(chatKey);
+        if (string.IsNullOrWhiteSpace(chatKey))
+            return string.Empty;
+
+        chatCustomNames ??= new List<ChatCustomNameEntry>();
+
+        for (int i = 0; i < chatCustomNames.Count; i++)
+        {
+            ChatCustomNameEntry entry = chatCustomNames[i];
+            if (entry == null || entry.chatKey != chatKey)
+                continue;
+
+            return entry.customName ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    public void SetCustomChatName(string chatKey, string customName)
+    {
+        chatKey = NormalizeChatKey(chatKey);
+        if (string.IsNullOrWhiteSpace(chatKey))
+            return;
+
+        string normalizedName = NormalizeCustomChatName(customName);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            ResetCustomChatName(chatKey);
+            return;
+        }
+
+        chatCustomNames ??= new List<ChatCustomNameEntry>();
+
+        for (int i = 0; i < chatCustomNames.Count; i++)
+        {
+            ChatCustomNameEntry entry = chatCustomNames[i];
+            if (entry == null || entry.chatKey != chatKey)
+                continue;
+
+            entry.customName = normalizedName;
+            return;
+        }
+
+        chatCustomNames.Add(new ChatCustomNameEntry
+        {
+            chatKey = chatKey,
+            customName = normalizedName
+        });
+    }
+
+    public void ResetCustomChatName(string chatKey)
+    {
+        chatKey = NormalizeChatKey(chatKey);
+        if (string.IsNullOrWhiteSpace(chatKey) || chatCustomNames == null)
+            return;
+
+        chatCustomNames.RemoveAll(e => e != null && e.chatKey == chatKey);
+    }
+
+    public static string ResolveChatDisplayName(GameData gameData, string chatKey, string originalName)
+    {
+        string fallback = string.IsNullOrWhiteSpace(originalName) ? "Chat" : originalName;
+        if (gameData == null)
+            return fallback;
+
+        string customName = gameData.GetCustomChatName(chatKey);
+        return string.IsNullOrWhiteSpace(customName) ? fallback : customName;
+    }
+
+    private static string NormalizeChatKey(string key)
+    {
+        return string.IsNullOrWhiteSpace(key) ? string.Empty : key.Trim();
+    }
+
+    private static string NormalizeCustomChatName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        string trimmed = name.Trim();
+        return trimmed.Length > 32 ? trimmed.Substring(0, 32) : trimmed;
     }
 
 }

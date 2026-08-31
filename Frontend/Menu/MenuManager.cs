@@ -27,6 +27,7 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
     [Tooltip("Кнопка, открывающая панель со слотами сохранений")]
     [SerializeField] private Button saveButton;
     [SerializeField] private Button settingsButton;
+    [SerializeField] private Button cheatButton;
     [SerializeField] private Button exitButton;
     [SerializeField] private Button patreonButton; // кнопка Patreon (необязательно, может быть null)
     [SerializeField] private string patreonUrl;
@@ -103,6 +104,8 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
 
         changeDesktopButton.onClick.AddListener(() => OpenPanel(changeDesktopPanel));
         changeNamesButton.onClick.AddListener(() => OpenPanel(changeNamesPanel));
+        if (cheatButton != null)
+            cheatButton.onClick.AddListener(() => OpenPanel(cheatPanel));
         //closeChangeDesktopButton.onClick.AddListener(ClosePanel);
         //closeChangeNamesButton.onClick.AddListener(ClosePanel);
 
@@ -133,9 +136,13 @@ public class MenuManager : MonoBehaviour, INavigableScreen, ISlotActionHost
         if (menuButtonsPanel != null)
             menuButtonsPanel.SetActive(false);
 
+        bool keepParentActive = currentPanel != null && panel.transform.IsChildOf(currentPanel.transform);
+
         if (currentPanel != null)
         {
-            currentPanel.SetActive(false);
+            if (!keepParentActive)
+                currentPanel.SetActive(false);
+
             panelHistory.Push(currentPanel);
         }
 

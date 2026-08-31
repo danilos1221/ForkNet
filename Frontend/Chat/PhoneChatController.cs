@@ -72,6 +72,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
 
     private void OnEnable()
     {
+        RefreshChatNames();
         ShowChatList();
     }
 
@@ -166,7 +167,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         {
             currentChatType = chat.chatType;
             Sprite avatar = Resources.Load<Sprite>(chat.avatarPath);
-            chatView?.SetChatHeader(chat.name, avatar);
+            chatView?.SetChatHeader(GetDisplayChatName(chat), avatar);
         }
         else
         {
@@ -330,7 +331,7 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
         foreach (Chat chat in GetChatsForCurrentDay())
         {
             Sprite avatar = Resources.Load<Sprite>(chat.avatarPath);
-            CreateChatItem(GetUiChatKey(chat.id), chat.name, avatar);
+            CreateChatItem(GetUiChatKey(chat.id), GetDisplayChatName(chat), avatar);
         }
 
         lastInitializedDay = currentDay;
@@ -680,5 +681,33 @@ public class PhoneChatController : MonoBehaviour, INavigableScreen
     private void OnSubmitButtonClicked()
     {
         scenarioManager?.OnPlayerActionButtonPressed();
+    }
+
+    public void RefreshChatNames()
+    {
+        InitializeChatList(true);
+        RestoreUnreadIndicators();
+
+        if (string.IsNullOrWhiteSpace(selectedChatId))
+            return;
+
+        Chat chat = FindChatById(selectedChatId, false);
+        if (chat == null)
+            return;
+
+        Sprite avatar = Resources.Load<Sprite>(chat.avatarPath);
+        chatView?.SetChatHeader(GetDisplayChatName(chat), avatar);
+    }
+
+    private string GetDisplayChatName(Chat chat)
+    {
+        if (chat == null)
+            return "Chat";
+
+        string key = GetThreadKey(chat);
+        if (string.IsNullOrWhiteSpace(key))
+            key = chat.id;
+
+        return GameData.ResolveChatDisplayName(gameData, key, chat.name);
     }
 }

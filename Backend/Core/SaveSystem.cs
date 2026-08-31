@@ -21,6 +21,7 @@ public class GameSave
     public List<ChatProgressEntry> chatProgressList = new List<ChatProgressEntry>();
     public string saveDate;  // Дата сохранения
     public List<ChatHistory> chatHistories = new List<ChatHistory>();
+    public List<ChatCustomNameEntry> chatCustomNames = new List<ChatCustomNameEntry>();
 }
 
 [System.Serializable]
@@ -103,6 +104,7 @@ public class SaveSystem : MonoBehaviour
 
             // НОВОЕ
             chatHistories = gameData.chatHistories ?? new List<ChatHistory>(),
+            chatCustomNames = gameData.chatCustomNames ?? new List<ChatCustomNameEntry>(),
 
             saveDate = System.DateTime.Now.ToString("dd.MM.yyyy HH:mm")
         };
@@ -292,6 +294,10 @@ public class SaveSystem : MonoBehaviour
         gameData.chatHistories =
         save.chatHistories ??
         new List<ChatHistory>();
+
+        gameData.chatCustomNames =
+            save.chatCustomNames ??
+            new List<ChatCustomNameEntry>();
 
         gameData.chatProgress = new Dictionary<string, ChatProgress>();
 
