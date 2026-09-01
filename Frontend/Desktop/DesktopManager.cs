@@ -9,6 +9,7 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
     [Header("UI References")]
     [SerializeField] private Canvas desktopCanvas;
     [SerializeField] private TextMeshProUGUI nicknameText;
+    [SerializeField] private Image desktopWallpaperImage;
     
     [Header("Desktop Icons")]
     [SerializeField] private Transform desktopIconsContainer;
@@ -91,6 +92,21 @@ public class DesktopManager : MonoBehaviour, INavigableScreen
     {
         if (GameManager.Instance != null)
             nicknameText.text = GameManager.Instance.nickname;
+    }
+
+    public void SetDesktopWallpaper(Sprite wallpaperSprite)
+    {
+        if (desktopWallpaperImage == null || wallpaperSprite == null)
+            return;
+
+        desktopWallpaperImage.sprite = wallpaperSprite;
+        desktopWallpaperImage.type = Image.Type.Simple;
+        desktopWallpaperImage.preserveAspect = false;
+    }
+
+    public Sprite GetDesktopWallpaper()
+    {
+        return desktopWallpaperImage != null ? desktopWallpaperImage.sprite : null;
     }
 
     #endregion
